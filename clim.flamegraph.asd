@@ -17,4 +17,28 @@
 
                 "mcclim")
 
-  :components  ())
+  :components  ((:module     "src"
+                 :serial     t
+                 :components ((:file "package")
+
+                              ;; Data structures
+                              (:file "trace-tree")
+
+                              ;; Application
+                              (:file "application")
+
+                              ;; Presentations and views
+                              (:file "colors")
+                              (:file "timeline")
+
+                              (:file "flat")
+                              (:file "flamegraph")
+
+                              ;; Commands
+                              (:file "commands")
+
+                              ;;
+                              (:file "interface"))))
+
+  :perform (load-op :before (operation component)
+             (sb-ext:assert-version->= 1 4 6)))
