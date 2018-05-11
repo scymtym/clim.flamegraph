@@ -13,4 +13,29 @@
   *This system uses an interface that has been introduced in SBCL
   1.4.6, so at least that SBCL version is required*.
 
-* TODO Tutorial
+* Tutorial
+
+  Recording a profile of running different work in two threads and
+  visualizing the profile:
+
+  #+BEGIN_SRC lisp
+    (progn
+      (sb-sprof:start-profiling)
+      (sb-thread:make-thread (lambda ()
+                               (loop :repeat 1000000000 :do (random 1.0f0))))
+      (sb-thread:make-thread (lambda ()
+                               (loop :repeat 10000 :do (compile nil '(lambda (x) (1+ x))))))
+      (sleep 5)
+      (sb-sprof:stop-profiling))
+
+    (bt:make-thread (lambda () (clim.flamegraph:flamegraph)))
+  #+END_SRC
+
+  + Use the "Set Interval Start", "Set Interval End", "Move Interval"
+    commands to select the temporal interval that should be displayed
+    in the "Flamegraph" tab. Really do it -- the view will not display
+    anything otherwise.
+
+  + Use the slider on the left side of the view to zoom in and
+    out. Execute a command (or just press return) -- the view will not
+    update otherwise (did I mention that I'm not a CLIM expert?).
