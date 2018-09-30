@@ -8,35 +8,47 @@
 
 ;; TODO make this a value-gadget. trace list is the value
 
-#+TODO (defclass selection ()
-         ((interval :initarg interval
-                    :reader  interval)
-          (threads  :initarg :threads
-                    :type    list
-                    :reader  threads)))
+;;; `timeline-view'
 
-;;; view
+(defclass timeline-view (clim:view)
+  ((time-scale :initarg  :time-scale
+               :reader   time-scale)
+   (selection  :initarg  :selection
+               :reader   selection)))
 
-(defclass timeline-view (view)
-  ((time-scale :initarg :time-scale
-               :reader   time-scale)))
+;;; `selection'
+
+(defclass selection ()
+  ((interval :initarg  :interval
+             :reader   interval)
+   (threads  :initarg  :threads
+             :reader   threads
+             :initform (make-hash-table :test #'eq))))
+
+(defun make-selection (start end)
+  (make-instance 'selection
+                 :interval (make-interval start end)))
+
+(defmethod selected? (thread (selection selection))
+  (ensure-gethash thread (threads selection) t))
 
 ;;; interval
 
-(defclass interval ()
-  ((start :initarg  :start
-          :type     (or null non-negative-real)
-          :accessor start
-          :initform nil)
-   (end   :initarg  :end
-          :type     (or null non-negative-real)
-          :accessor end
-          :initform nil)))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defclass interval ()
+    ((start :initarg  :start
+            :type     (or null non-negative-real)
+            :accessor start
+            :initform nil)
+     (end   :initarg  :end
+            :type     (or null non-negative-real)
+            :accessor end
+            :initform nil)))
+
+  (clim:define-presentation-type interval ()))
 
 (defun make-interval (start end)
   (make-instance 'interval :start start :end end))
-
-(define-presentation-type interval ())
 
 (defconstant +interval-ink+
   (if (boundp '+interval-ink+)
@@ -84,46 +96,42 @@
 
     (update-selection clim:*application-frame* interval)))
 
-;;; `selection'
-
-(defclass selection ()
-  ((interval :initarg  :interval
-             :reader   interval)
-   (threads  :initarg  :threads
-             :reader   threads
-             :initform (make-hash-table :test #'eq))))
-
 ;;; `thread' class and presentation type
 ;;;
 ;;; Represents a thread for which samples have been collected.
 
-(defclass thread ()
-  ((thread    :initarg  :thread
-              :reader   thread)
-   (selected? :initarg  :selected?
-              :accessor selected?
-              :initform t)))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defclass thread ()
+    ((thread    :initarg  :thread
+                :reader   thread)
+     #+no (selected? :initarg  :selected?
+                :accessor selected?
+                :initform t)))
+
+  (clim:define-presentation-type thread ()))
 
 (defmethod name ((object thread))
-  (or (sb-thread:thread-name (thread object))
-      "<unnamed>"))
+  (sb-thread:thread-name (thread object)))
 
-(clim:define-presentation-type thread ())
-
-(clim:define-presentation-method present ((object thread)
-                                          (type   thread)
-                                          (stream t)
-                                          (view   timeline-view)
-                                          &key)
-  (clim:with-drawing-options (stream :ink (if (selected? object)
-                                              clim:+foreground-ink+
-                                              clim:+red+ ; +lightgray+
-                                              )
-                                     :text-face :bold)
-    (clim:draw-text* stream (name object) 0 .5 :align-y :center)))
+(clim:define-presentation-method clim:present ((object thread)
+                                               (type   thread)
+                                               (stream t)
+                                               (view   timeline-view)
+                                               &key)
+  (let* ((name         (name object))
+         (display-name (or name "unnamed")))
+    (clim:with-drawing-options (stream :ink (if (selected? (thread object) (selection view))
+                                                clim:+foreground-ink+
+                                                clim:+red+ ; +lightgray+
+                                                )
+                                       :text-face (if name
+                                                      :bold
+                                                      '(:bold :italic)))
+      (clim:draw-text* stream display-name 0 .5 :align-y :center))))
 
 (define-flamegraph-command toggle-thread ((thread thread))
-  (setf (selected? thread) (not (selected? thread))))
+  ; (setf (selected? thread) (not (selected? thread)))
+  )
 
 (clim:define-presentation-to-command-translator toggle-thread
     (thread toggle-thread flamegraph)
@@ -160,12 +168,13 @@
   (make-instance 'lane :index index :thread (make-instance 'thread :thread thread)))
 
 (defun display-timeline (frame pane &key (time-scale 300) (lane-height 24))
-  (let ((traces   (traces frame))
-        (interval (selection-interval pane))
-        (view     (clim:stream-default-view pane))
+  (let* ((traces    (traces frame))
+         (selection (selection pane))
+         (interval  (interval selection))
+         (view      (clim:stream-default-view pane))
 
-        (lanes    '()))
-
+         (lanes     '()))
+    (describe (selection view) *trace-output*)
     ;; make a function traces -> selection -> filtered-traces
 
     ;; TODO separate function for lane precipitation
@@ -220,9 +229,9 @@
 
 ;;;
 
-(defclass timeline-pane (application-pane)
-  ((selection-interval :reader   selection-interval
-                       :initform (make-interval 1 3)))
+(defclass timeline-pane (clim:application-pane)
+  ((selection :reader   selection
+              :initform (make-selection 1 3))) ; TODO where should the selection be?
   (:default-initargs
    :display-function 'display-timeline
-   :default-view     (make-instance 'timeline-view :time-scale 300)))
+   :default-view     (make-instance 'timeline-view :time-scale 300 :selection (make-selection 1 3))))
