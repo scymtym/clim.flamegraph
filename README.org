@@ -10,4 +10,7 @@
   contrib module as a flamegraph, i.e. a visualization of the relative
   frequencies of function call chains.
 
+  *This system uses an interface that has been introduced in SBCL
+  1.4.6, so at least that SBCL version is required*.
+
 * TODO Tutorial
