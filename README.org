@@ -6,7 +6,7 @@
 * Introduction
 
   The ~clim.flamegraph~ system is a proof of concept application for
-  [[https://https://common-lisp.net/project/mcclim/][McCLIM]] that displays profiling data recorded uses [[https://sbcl.org][SBCL]]'s ~sb-sprof~
+  [[https://common-lisp.net/project/mcclim/][McCLIM]] that displays profiling data recorded uses [[http://sbcl.org][SBCL]]'s ~sb-sprof~
   contrib module as a flamegraph, i.e. a visualization of the relative
   frequencies of function call chains.
 
