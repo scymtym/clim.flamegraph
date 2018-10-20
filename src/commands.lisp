@@ -17,17 +17,24 @@
   `(,trace))
 
 (define-flamegraph-command (com-zoom-call :name t) ((function call))
-  (declare (ignore function)))
+  (let ((state (state (clim:find-pane-named clim:*application-frame* 'flamegraph))))
+    (setf (%root state) function
+          (scale state) 0)
+    ;; TODO hack
+    (setf (clim:gadget-value (clim:find-pane-named clim:*application-frame* 'scale)) 0)))
 
 (clim:define-presentation-to-command-translator zoom-call
     (call com-zoom-call flamegraph
-          :tester ((object) (node-call object))
+          :gesture :select
+          :tester  ((object) (node-call object))
           :pointer-documentation
           ((object stream)
-           (format stream "View ~A and its callees"
-                   (sb-sprof::node-name (node-call object)))))
+           (format stream "Focus view on ~A and its callees"
+                   (node-name object))))
     (function)
   `(,function))
+
+;;; Disassemble
 
 (define-flamegraph-command (com-disassemble :name t) ((function call))
   (declare (ignore function))
@@ -43,7 +50,7 @@
           :pointer-documentation
           ((object stream)
            (format stream "Disassemble ~A"
-                   (sb-sprof::node-name (node-call object)))))
+                   (node-name object))))
     (function)
   `(,function))
 

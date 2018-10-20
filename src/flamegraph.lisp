@@ -12,6 +12,10 @@
   ((%tree        :initarg  :tree
                  :accessor tree
                  :initform nil)
+   (%root        :initarg  :root
+                 :accessor root
+                 :writer   (setf %root)
+                 :initform nil)
    (%scale       :initarg  :scale
                  :accessor scale
                  :initform 0)
@@ -29,7 +33,21 @@
                  :accessor hook
                  :initform nil)))
 
+(defmethod shared-initialize :after ((instance   flamegraph-state)
+                                     (slot-names t)
+                                     &key
+                                     (tree nil tree-supplied-p)
+                                     (root nil root-supplied-p))
+  (declare (ignore root))
+  (when (and tree-supplied-p (not root-supplied-p))
+    (setf (%root instance) tree)))
+
 (defmethod (setf tree) :after ((new-value t) (object flamegraph-state))
+  (setf (%root object) new-value)
+  (when-let ((hook (hook object)))
+    (funcall hook object)))
+
+(defmethod (setf root) :after ((new-value t) (object flamegraph-state))
   (when-let ((hook (hook object)))
     (funcall hook object)))
 
@@ -180,8 +198,8 @@
 
 (defun display-flame-graph (frame pane)
   (let ((state (state pane)))
-    (when-let ((tree (tree state)))
-      (clim:present tree 'call-tree :stream pane :view state)
+    (when-let ((root (root state)))
+      (clim:present root 'call-tree :stream pane :view state)
       (clim:change-space-requirements pane :resize-frame nil))))
 
 ;; TODO this is a recurring pattern
