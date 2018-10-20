@@ -38,6 +38,9 @@
   (count    nil                             :type non-negative-integer)
   (children (make-hash-table :test #'equal) :type hash-table))
 
+(defun node-name (node)
+  (sb-sprof::node-name (node-call node)))
+
 #+no (defun traces->tree (traces &key filter)
        (let ((root (make-node)))
          (sb-sprof::with-lookup-tables ()

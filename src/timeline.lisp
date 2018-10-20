@@ -6,8 +6,6 @@
 
 (cl:in-package #:clim.flamegraph)
 
-;; TODO make this a value-gadget. trace list is the value
-
 ;;; `timeline-view'
 
 (defclass timeline-view (clim:view)
@@ -16,39 +14,9 @@
    (selection  :initarg  :selection
                :reader   selection)))
 
-;;; `selection'
+;; TODO make this a value-gadget. trace list is the value
 
-(defclass selection ()
-  ((interval :initarg  :interval
-             :reader   interval)
-   (threads  :initarg  :threads
-             :reader   threads
-             :initform (make-hash-table :test #'eq))))
-
-(defun make-selection (start end)
-  (make-instance 'selection
-                 :interval (make-interval start end)))
-
-(defmethod selected? (thread (selection selection))
-  (ensure-gethash thread (threads selection) t))
-
-;;; interval
-
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (defclass interval ()
-    ((start :initarg  :start
-            :type     (or null non-negative-real)
-            :accessor start
-            :initform nil)
-     (end   :initarg  :end
-            :type     (or null non-negative-real)
-            :accessor end
-            :initform nil)))
-
-  (clim:define-presentation-type interval ()))
-
-(defun make-interval (start end)
-  (make-instance 'interval :start start :end end))
+(clim:define-presentation-type interval ())
 
 (defconstant +interval-ink+
   (if (boundp '+interval-ink+)
@@ -140,7 +108,7 @@
 
 ;;; `trace' presentation type
 ;;;
-;;; Represents a call-stack snapshot" collected in a single thread.
+;;; Represents a "call-stack snapshot" collected in a single thread.
 
 (clim:define-presentation-type trace ())
 
@@ -174,7 +142,6 @@
          (view      (clim:stream-default-view pane))
 
          (lanes     '()))
-    (describe (selection view) *trace-output*)
     ;; make a function traces -> selection -> filtered-traces
 
     ;; TODO separate function for lane precipitation

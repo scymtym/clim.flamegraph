@@ -1,6 +1,6 @@
-;;;; conditions.lisp --- Conditions used in the options system.
+;;;; interface.lisp --- User-facing convenience functions.
 ;;;;
-;;;; Copyright (C) 2011-2016, 2018 Jan Moringen
+;;;; Copyright (C) 2011-2018 Jan Moringen
 ;;;;
 ;;;; Author: Jan Moringen <jmoringe@techfak.uni-bielefeld.de>
 

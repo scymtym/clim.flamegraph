@@ -23,6 +23,7 @@
 
                               ;; Data structures
                               (:file "trace-tree")
+                              (:file "model")
 
                               ;; Application
                               (:file "application")

@@ -23,26 +23,27 @@
 
 (defun display-flat (frame pane)
   (declare (ignore frame))
-  (let* ((stream pane)
-         (trace-count (sb-sprof::samples-trace-count sb-sprof::*samples*))
-         (graph       (sb-sprof::make-call-graph 100 #+no most-positive-fixnum #+todo (traces frame)))
-         (nodes       (stable-sort (sb-sprof::graph-vertices graph)
-                                   (sb-sprof::make-node-comparator
-                                    :samples :descending))))
-    (clim:formatting-table (stream)
-      (dolist (node nodes)
-        (clim:formatting-row (stream)
-          ;; Name
-          (clim:formatting-column (stream)
-            (clim:formatting-cell (stream)
-              (let ((*print-pretty* nil))
-                (clim:with-output-as-presentation (stream node 'node)
-                  (clim:with-drawing-options (stream :ink clim:+red+)
-                    (let ((name (princ-to-string  (sb-sprof::node-name node))))
-                      (write-string name stream :end (min 80 (length name)))))))))
-          ;; Count
-          (clim:formatting-column (stream)
-            (format-count-cell stream (sb-sprof::node-count node) trace-count :ratio))
-          ;; Accrued count
-          (clim:formatting-column (stream)
-            (format-count-cell stream (sb-sprof::node-accrued-count node) trace-count :ratio)))))))
+  (when sb-sprof::*samples*
+    (let* ((stream pane)
+           (trace-count (sb-sprof::samples-trace-count sb-sprof::*samples*))
+           (graph       (sb-sys:without-gcing (sb-sprof::make-call-graph-1 100 #+no most-positive-fixnum #+todo (traces frame))))
+           (nodes       (stable-sort (sb-sprof::graph-vertices graph)
+                                     (sb-sprof::make-node-comparator
+                                      :samples :descending))))
+      (clim:formatting-table (stream)
+        (dolist (node nodes)
+          (clim:formatting-row (stream)
+            ;; Name
+            (clim:formatting-column (stream)
+              (clim:formatting-cell (stream)
+                (let ((*print-pretty* nil))
+                  (clim:with-output-as-presentation (stream node 'node)
+                    (clim:with-drawing-options (stream :ink clim:+red+)
+                      (let ((name (princ-to-string  (sb-sprof::node-name node))))
+                        (write-string name stream :end (min 80 (length name)))))))))
+            ;; Count
+            (clim:formatting-column (stream)
+              (format-count-cell stream (sb-sprof::node-count node) trace-count :ratio))
+            ;; Accrued count
+            (clim:formatting-column (stream)
+              (format-count-cell stream (sb-sprof::node-accrued-count node) trace-count :ratio))))))))
