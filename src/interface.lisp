@@ -7,4 +7,5 @@
 (cl:in-package #:clim.flamegraph)
 
 (defun flamegraph (&optional (samples sb-sprof::*samples*))
-  (clim:run-frame-top-level (clim:make-application-frame 'flamegraph :traces samples)))
+  (let ((frame (clim:make-application-frame 'flamegraph :traces samples)))
+    (clim:run-frame-top-level frame)))

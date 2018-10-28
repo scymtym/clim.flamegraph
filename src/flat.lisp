@@ -9,17 +9,18 @@
 (clim:define-presentation-type node ())
 
 (defun format-count-cell (stream count total style)
-  (let ((ratio (/ count total)))
+  (let* ((ratio (/ count total))
+         (text  (ecase style
+                  (:count
+                   (format nil "~:D" count))
+                  (:ratio
+                   (format nil "~,2,2F" ratio)))))
     (clim:formatting-cell (stream :align-x :right)
       (clim:with-drawing-options (stream :ink (cond ; TODO
                                                 ((> ratio .1)  clim:+red+)
                                                 ((> ratio .01) clim:+orange+)
                                                 (t             clim:+black+)))
-        (ecase style
-          (:count
-           (format stream "~:D" count))
-          (:ratio
-           (format stream "~,2,2F" ratio)))))))
+        (write-string text stream)))))
 
 (defun display-flat (frame pane)
   (declare (ignore frame))

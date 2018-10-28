@@ -6,6 +6,18 @@
 
 (cl:in-package #:clim.flamegraph)
 
+;;; `thread' class
+
+(defclass thread ()
+  ((thread    :initarg  :thread
+              :reader   thread)
+   #+no (selected? :initarg  :selected?
+                   :accessor selected?
+                   :initform t)))
+
+(defmethod name ((object thread))
+  (sb-thread:thread-name (thread object)))
+
 ;;; `selection'
 
 (defclass selection ()
@@ -19,8 +31,11 @@
   (make-instance 'selection
                  :interval (make-interval start end)))
 
-(defmethod selected? (thread (selection selection))
+(defmethod selected? ((thread t) (selection selection))
   (ensure-gethash thread (threads selection) t))
+
+(defmethod (setf selected?) ((new-value t) (thread t) (selection selection))
+  (setf (gethash thread (threads selection)) new-value))
 
 ;;; interval
 

@@ -12,16 +12,21 @@
   ((%tree        :initarg  :tree
                  :accessor tree
                  :initform nil)
+   (%thread-tree :initarg  :thread-tree
+                 :accessor thread-tree
+                 :initform nil)
    (%root        :initarg  :root
                  :accessor root
                  :writer   (setf %root)
                  :initform nil)
+   ;;
    (%scale       :initarg  :scale
                  :accessor scale
                  :initform 0)
    (%depth-limit :initarg  :depth-limit
                  :accessor depth-limit
-                 :initform nil)
+                 :writer   (setf %depth-limit)
+                 :initform 100)
    ;;
    (%text-style  :initarg  :text-style
                  :accessor text-sytle)
@@ -43,7 +48,7 @@
     (setf (%root instance) tree)))
 
 (defmethod (setf tree) :after ((new-value t) (object flamegraph-state))
-  (setf (%root object) new-value)
+  (setf (%root object) nil)
   (when-let ((hook (hook object)))
     (funcall hook object)))
 
@@ -55,7 +60,7 @@
   (when-let ((hook (hook object)))
     (funcall hook object)))
 
-#+no (defmethod (setf depth-limit) :after ((new-value t) (object flamegraph-state))
+(defmethod (setf depth-limit) :after ((new-value t) (object flamegraph-state))
   (when-let ((hook (hook object)))
     (funcall hook object)))
 
@@ -79,7 +84,7 @@
   (format stream "~A, ~D hit~:P"
           (node-name object) (node-count object)))
 
-(clim:define-presentation-type call-tree ())
+(clim:define-presentation-type call-tree (&optional (shrink 1)))
 
 (clim:define-presentation-method clim:present ((object node)
                                                (type   call-tree)
@@ -150,6 +155,26 @@
       #+no (setf (stream-cursor-position stream)
                  (values x (nth-value 1 (stream-cursor-position stream)))))))
 
+(clim:define-presentation-method clim:highlight-presentation ((type   call)
+                                                              (record t)
+                                                              (stream t)
+                                                              (state  (eql :highlight)))
+  (let ((object (clim:presentation-object record))
+        (region (clim:bounding-rectangle record)))
+    (clim:draw-design stream region :ink clim:+background-ink+)
+    (clim:with-bounding-rectangle* (x1 y1 x2 y2) region
+      (clim:draw-text* stream (format nil "~A, ~:D hit~:P"
+                                      (sb-sprof::node-name (node-call object))
+                                      (node-count object))
+                       (/ (+ x1 x2) 2) (/ (+ y1 y2) 2)
+                       :align-x :center :align-y :center :text-family :fix :text-size :small))))
+
+(clim:define-presentation-method clim:highlight-presentation ((type   call)
+                                                              (record t)
+                                                              (stream t)
+                                                              (state  (eql :unhighlight)))
+  (clim:replay-output-record record stream))
+
 (clim:define-presentation-method clim:present ((object node)
                                                (type   call-tree)
                                                stream
@@ -158,7 +183,7 @@
   (let* ((depth-limit (or (depth-limit view) most-positive-fixnum))
          (total-count (node-count object)) ; root node
          (sheet-width (clim:bounding-rectangle-width (clim:sheet-region stream)))
-         (scale       (* sheet-width (/ total-count) (expt 2 (scale view)))))
+         (scale       (* sheet-width shrink (/ total-count) (expt 2 (scale view)))))
     (labels ((present-node (node &optional (depth 0) (position 0))
                (let* ((presentation (clim:present node `(call ,depth ,position ,scale)
                                                   :stream stream :view view :single-box t))
@@ -176,6 +201,28 @@
                         (hash-table-values (node-children node)))) ; TODO interface without hash-table
                  presentation)))
       (present-node object))))
+
+(clim:define-presentation-method clim:present ((object thread-tree)
+                                               (type   call-tree)
+                                               stream
+                                               (view   flamegraph-state)
+                                               &key)
+  (let ((total-count 0))
+    (maphash (lambda (thread tree)
+               (declare (ignore thread))
+               (incf total-count (node-count tree)))
+             (thread-tree-children object))
+    (maphash (lambda (thread tree)
+               (let ((shrink (/ (node-count tree) total-count)))
+                 (let ((old-x (clim:stream-cursor-position stream)))
+                   (clim:stream-increment-cursor-position stream 0 18)
+                   (clim:present tree `(call-tree ,shrink) :stream stream :view view)
+                   (let ((new-x (clim:stream-cursor-position stream)))
+                     (setf (clim:stream-cursor-position stream)
+                           (values (/ (+ old-x new-x) 2) 2))
+                     (clim:present thread 'thread :stream stream :view view)
+                     (setf (clim:stream-cursor-position stream) (values (+ new-x 16) 0))))))
+             (thread-tree-children object))))
 
 ;;; Pane
 
@@ -198,8 +245,9 @@
 
 (defun display-flame-graph (frame pane)
   (let ((state (state pane)))
-    (when-let ((root (root state)))
-      (clim:present root 'call-tree :stream pane :view state)
+    (when-let ((tree (or (root        state)
+                         (thread-tree state))))
+      (clim:present tree 'call-tree :stream pane :view state)
       (clim:change-space-requirements pane :resize-frame nil))))
 
 ;; TODO this is a recurring pattern

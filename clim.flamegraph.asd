@@ -4,7 +4,7 @@
 ;;;;
 ;;;; Author: Jan Moringen <jmoringe@techfak.uni-bielefeld.de>
 
-(defsystem "clim.flamegraph"
+(asdf:defsystem "clim.flamegraph"
   :description "Flamegraph-style visualization of sb-sprof results in CLIM."
   :license     "GPLv3"
   :author      "Jan Moringen <jmoringe@techfak.uni-bielefeld.de>"
@@ -22,8 +22,8 @@
                  :components ((:file "package")
 
                               ;; Data structures
-                              (:file "trace-tree")
                               (:file "model")
+                              (:file "trace-tree")
 
                               ;; Application
                               (:file "application")

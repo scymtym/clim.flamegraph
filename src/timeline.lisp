@@ -11,7 +11,7 @@
 (defclass timeline-view (clim:view)
   ((time-scale :initarg  :time-scale
                :reader   time-scale)
-   (selection  :initarg  :selection
+   #+no (selection  :initarg  :selection
                :reader   selection)))
 
 ;; TODO make this a value-gadget. trace list is the value
@@ -21,7 +21,7 @@
 (defconstant +interval-ink+
   (if (boundp '+interval-ink+)
       (symbol-value '+interval-ink+)
-      (clim:compose-in clim:+red+ (clim:make-opacity .3))))
+      (clim:compose-in clim:+black+ (clim:make-opacity .1))))
 
 (clim:define-presentation-method clim:present ((object interval)
                                                (type   interval)
@@ -64,42 +64,46 @@
 
     (update-selection clim:*application-frame* interval)))
 
-;;; `thread' class and presentation type
+;;; `thread' presentation type
 ;;;
 ;;; Represents a thread for which samples have been collected.
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defclass thread ()
-    ((thread    :initarg  :thread
-                :reader   thread)
-     #+no (selected? :initarg  :selected?
-                :accessor selected?
-                :initform t)))
-
-  (clim:define-presentation-type thread ()))
-
-(defmethod name ((object thread))
-  (sb-thread:thread-name (thread object)))
+  (clim:define-presentation-type thread (&optional (selected? t))))
 
 (clim:define-presentation-method clim:present ((object thread)
+                                               (type   thread)
+                                               (stream t)
+                                               (view   t)
+                                               &key)
+  (let* ((name         (name object))
+         (display-name (or name "unnamed")))
+    (clim:with-drawing-options (stream :ink       (if selected?
+                                                      clim:+foreground-ink+
+                                                      clim:+light-gray+)
+                                       :text-face (if name
+                                                      :bold
+                                                      '(:bold :italic)))
+      (write-string display-name stream))))
+
+(clim:define-presentation-method clim:present ((object thread) ; TODO too similar to previous
                                                (type   thread)
                                                (stream t)
                                                (view   timeline-view)
                                                &key)
   (let* ((name         (name object))
          (display-name (or name "unnamed")))
-    (clim:with-drawing-options (stream :ink (if (selected? (thread object) (selection view))
-                                                clim:+foreground-ink+
-                                                clim:+red+ ; +lightgray+
-                                                )
+    (clim:with-drawing-options (stream :ink       (if selected?
+                                                      clim:+foreground-ink+
+                                                      clim:+light-gray+)
                                        :text-face (if name
                                                       :bold
                                                       '(:bold :italic)))
       (clim:draw-text* stream display-name 0 .5 :align-y :center))))
 
 (define-flamegraph-command toggle-thread ((thread thread))
-  ; (setf (selected? thread) (not (selected? thread)))
-  )
+  (let ((selection (selection (clim:find-pane-named clim:*application-frame* 'timeline))))
+    (setf (selected? thread selection) (not (selected? thread selection)))))
 
 (clim:define-presentation-to-command-translator toggle-thread
     (thread toggle-thread flamegraph)
@@ -132,10 +136,15 @@
            :accessor traces
            :initform '())))
 
-(defun make-lane (index thread)
-  (make-instance 'lane :index index :thread (make-instance 'thread :thread thread)))
+(defvar *thread-hack* (make-hash-table :test #'eq))
 
-(defun display-timeline (frame pane &key (time-scale 300) (lane-height 24))
+(defun make-lane (index thread)
+  (make-instance 'lane :index index :thread (ensure-gethash thread *thread-hack* (make-instance 'thread :thread thread))))
+
+(defun display-timeline (frame pane
+                         &key
+                         (time-scale (time-scale (clim:stream-default-view pane)))
+                         (lane-height 24))
   (let* ((traces    (traces frame))
          (selection (selection pane))
          (interval  (interval selection))
@@ -164,28 +173,37 @@
 
         (map nil (lambda (lane)
                    (with-accessors ((index index) (thread thread)) lane
-                     (clim:with-translation (pane 0 (* lane-height index))
-                       (clim:with-scaling (pane 1 (- lane-height 4))
-                         (let ((presentation (clim:present thread 'thread :stream pane :view view)))
+                     (let ((selected? (selected? thread selection)))
+                       (clim:with-translation (pane 0 (+ (* lane-height index) (/ lane-height 2)))
+                         (let ((presentation (clim:present thread `(thread ,selected?) :stream pane :view view)))
                            (maxf thread-max-x (clim:bounding-rectangle-max-x presentation)))))))
              lanes)
 
         (clim:with-translation (pane (+ thread-max-x 4) 0)
-          (map nil (lambda (lane)
-                     (with-accessors ((index index) (traces traces)) lane
-                       (clim:with-translation (pane 0 (* lane-height index))
-                         (map nil (lambda (time+trace)
-                                    (destructuring-bind (time . trace) time+trace
-                                      (maxf time-max time)
-                                      (clim:with-output-as-presentation (pane trace 'trace)
-                                        (let ((x (* time-scale time)))
-                                          (clim:draw-line* pane x 2 x (- lane-height 4))))))
-                              traces))))
-               lanes)
+          (loop :for lane :in lanes
+                :for i :from 0
+                :for ink = (if (selected? (thread lane) selection)
+                               (clim:make-contrasting-inks 8 (1+ (mod i 7)))
+                               clim:+light-gray+)
+                :do (clim:with-drawing-options (pane :ink ink)
+                      (with-accessors ((index index) (traces traces)) lane
+                        (clim:with-translation (pane 0 (* lane-height index))
+                          (loop :for (time . trace) :in traces
+                                :with limit = (truncate (- lane-height 4) 4)
+                                :for i :from 0
+                                :do (maxf time-max time)
+                                    (clim:with-output-as-presentation (pane trace 'trace)
+                                      (let ((x (* time-scale time)))
+                                        (clim:draw-circle* pane x (+ 2 (* 4 (mod i limit))) 4))))))))
 
           ;;
           (clim:with-scaling (pane 1 (* lane-height (length lanes)))
-            (clim:present interval 'interval :stream pane :view view))))
+            (clim:present interval 'interval :stream pane :view view)))
+
+        (loop :for lane :in (rest lanes)
+              :for y :from lane-height :by lane-height
+              :do (clim:draw-line* pane 0 y (+ thread-max-x 4 (* time-max time-scale)) y
+                                   :line-style (clim:make-line-style :dashes '(4 4)))))
 
       (clim:with-translation (pane (+ thread-max-x 4) 0)
         (loop :for i :from 0 :to (floor time-max)
@@ -197,8 +215,10 @@
 ;;;
 
 (defclass timeline-pane (clim:application-pane)
-  ((selection :reader   selection
+  ((selection :initarg  :selection
+              :reader   selection
               :initform (make-selection 1 3))) ; TODO where should the selection be?
   (:default-initargs
    :display-function 'display-timeline
-   :default-view     (make-instance 'timeline-view :time-scale 300 :selection (make-selection 1 3))))
+   :default-view     (make-instance 'timeline-view :time-scale 100 ; unused :selection (make-selection 1 3)
+                                    )))
