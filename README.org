@@ -13,6 +13,8 @@
   *This system uses an interface that has been introduced in SBCL
   1.4.6, so at least that SBCL version is required*.
 
+  [[file:screenshots/screenshot-1.png]]
+
 * Tutorial
 
   Recording a profile of running different work in two threads and
