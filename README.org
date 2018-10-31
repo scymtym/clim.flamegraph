@@ -10,12 +10,9 @@
   contrib module as a flamegraph, i.e. a visualization of the relative
   frequencies of function call chains.
 
-  *This system uses an interface that has been introduced in SBCL
-  1.4.6, so at least that SBCL version is required*.
+  *This system uses an interface that has been introduced in SBCL 1.4.6, so at least that SBCL version is required.*
 
-  *SBCL 1.4.13 includes an important performance improvement for
-  sorting profiling results. If redisplay performance is not good
-  enough, try using that SBCL version.*
+  *SBCL 1.4.13 includes an important performance improvement for sorting profiling results. If redisplay performance is not good enough, try using that SBCL version.*
 
   [[file:screenshots/screenshot-1.png]]
 
