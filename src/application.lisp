@@ -70,8 +70,8 @@
    (flamegraph            flamegraph-pane)
    #+no (callgraph             application-pane
                                )
-   (interactor            :interactor)
-   (pointer-documentation :pointer-documentation))
+   (interactor            :interactor))
+  (:pointer-documentation t)
   (:layouts
    (:default
     (clim:vertically ()
@@ -97,8 +97,7 @@
                #+no ("callgraph"
                      (scrolling ()
                        callgraph))))
-      (1/8 interactor)
-      (1/16 pointer-documentation))))
+      (1/8 interactor))))
   (:default-initargs
    :width 800))
 
