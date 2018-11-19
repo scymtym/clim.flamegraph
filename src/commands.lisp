@@ -44,7 +44,7 @@
         (setf (selected-traces frame)
               (select-traces (traces frame) :start-time start :end-time end))))))
 
-(clim:define-presentation-to-command-translator disassemble-call
+#+no (clim:define-presentation-to-command-translator disassemble-call
     (call com-disassemble flamegraph
           :tester ((object) (node-call object))
           :pointer-documentation
