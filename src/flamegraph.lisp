@@ -9,7 +9,8 @@
 ;;; Flame graph view state (also serves as view in the Clim sense)
 
 (defclass flamegraph-state (clim:view)
-  ((%tree        :initarg  :tree
+  (;; Data
+   (%tree        :initarg  :tree
                  :accessor tree
                  :initform nil)
    (%thread-tree :initarg  :thread-tree
@@ -19,7 +20,7 @@
                  :accessor root
                  :writer   (setf %root)
                  :initform nil)
-   ;;
+   ;; Visual state
    (%scale       :initarg  :scale
                  :accessor scale
                  :initform 0)
@@ -27,7 +28,7 @@
                  :accessor depth-limit
                  :writer   (setf %depth-limit)
                  :initform 100)
-   ;;
+   ;; Cache
    (%text-style  :initarg  :text-style
                  :accessor text-sytle)
    (%char-width  :accessor char-width
@@ -155,25 +156,42 @@
       #+no (setf (stream-cursor-position stream)
                  (values x (nth-value 1 (stream-cursor-position stream)))))))
 
-(clim:define-presentation-method clim:highlight-presentation ((type   call)
-                                                              (record t)
-                                                              (stream t)
-                                                              (state  (eql :highlight)))
-  (let ((object (clim:presentation-object record))
-        (region (clim:bounding-rectangle record)))
-    (clim:draw-design stream region :ink clim:+background-ink+)
-    (clim:with-bounding-rectangle* (x1 y1 x2 y2) region
-      (clim:draw-text* stream (format nil "~A, ~:D hit~:P"
-                                      (sb-sprof::node-name (node-call object))
-                                      (node-count object))
-                       (/ (+ x1 x2) 2) (/ (+ y1 y2) 2)
-                       :align-x :center :align-y :center :text-family :fix :text-size :small))))
+(defvar *highlight-text-style*
+  (clim:make-text-style :fix nil :small))
 
-(clim:define-presentation-method clim:highlight-presentation ((type   call)
-                                                              (record t)
-                                                              (stream t)
-                                                              (state  (eql :unhighlight)))
-  (clim:replay-output-record record stream))
+(labels ((info-text (node)
+           (let ((*print-right-margin* nil))
+             (format nil "~S, ~:D hit~:P"
+                     (sb-sprof::node-name (node-call node))
+                     (node-count node))))
+         (draw-info (stream record node)
+           (let* ((style *highlight-text-style*)
+                  (text  (info-text node)))
+             (clim:with-bounding-rectangle* (x1 y1 x2 y2) record
+               (clim:surrounding-output-with-border  (stream :shape      :drop-shadow
+                                                             :background clim:+background-ink+)
+                 ;; Include the RECORD so the border will be at least
+                 ;; as big.
+                 (clim:draw-design stream record :ink clim:+transparent-ink+)
+                 (clim:draw-text* stream text
+                                  (/ (+ x1 x2) 2) (/ (+ y1 y2) 2)
+                                  :align-x :center :align-y :center :text-style style))))))
+
+  (clim:define-presentation-method clim:highlight-presentation ((type   call)
+                                                                (record t)
+                                                                (stream t)
+                                                                (state  (eql :highlight)))
+    (clim:with-output-recording-options (stream :draw t :record nil)
+      (draw-info stream record (clim:presentation-object record))))
+
+  (clim:define-presentation-method clim:highlight-presentation ((type   call)
+                                                                (record t)
+                                                                (stream t)
+                                                                (state  (eql :unhighlight)))
+    (let ((record (clim:with-output-recording-options (stream :draw nil :record nil)
+                    (clim:with-output-to-output-record (stream)
+                      (draw-info stream record (clim:presentation-object record))))))
+      (clim:repaint-sheet stream record))))
 
 (clim:define-presentation-method clim:present ((object node)
                                                (type   call-tree)
