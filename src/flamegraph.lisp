@@ -168,8 +168,8 @@
            (let* ((style *highlight-text-style*)
                   (text  (info-text node)))
              (clim:with-bounding-rectangle* (x1 y1 x2 y2) record
-               (clim:surrounding-output-with-border  (stream :shape      :drop-shadow
-                                                             :background clim:+background-ink+)
+               (clim:surrounding-output-with-border (stream :shape      :drop-shadow
+                                                            :background clim:+background-ink+)
                  ;; Include the RECORD so the border will be at least
                  ;; as big.
                  (clim:draw-design stream record :ink clim:+transparent-ink+)
@@ -211,11 +211,11 @@
                        (values (clim:stream-cursor-position stream) y))
                  (when (< depth depth-limit)
                    (map nil (lambda (child)
-                              (let ((child-presentation
-                                      (present-node child (1+ depth) (incf position))))
-                                (let ((x2 (clim:bounding-rectangle-max-x child-presentation)))
-                                  (setf (clim:stream-cursor-position stream)
-                                        (values x2 y)))))
+                              (let* ((child-presentation
+                                       (present-node child (1+ depth) (incf position)))
+                                     (x2 (clim:bounding-rectangle-max-x child-presentation)))
+                                (setf (clim:stream-cursor-position stream)
+                                      (values x2 y))))
                         (hash-table-values (node-children node)))) ; TODO interface without hash-table
                  presentation)))
       (present-node object))))
@@ -234,12 +234,14 @@
                (let ((shrink (/ (node-count tree) total-count)))
                  (let ((old-x (clim:stream-cursor-position stream)))
                    (clim:stream-increment-cursor-position stream 0 18)
-                   (clim:present tree `(call-tree ,shrink) :stream stream :view view)
+                   (clim:present tree `(call-tree ,shrink)
+                                 :stream stream :view view)
                    (let ((new-x (clim:stream-cursor-position stream)))
                      (setf (clim:stream-cursor-position stream)
                            (values (/ (+ old-x new-x) 2) 2))
                      (clim:present thread 'thread :stream stream :view view)
-                     (setf (clim:stream-cursor-position stream) (values (+ new-x 16) 0))))))
+                     (setf (clim:stream-cursor-position stream)
+                           (values (+ new-x 16) 0))))))
              (thread-tree-children object))))
 
 ;;; Pane
