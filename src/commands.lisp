@@ -8,8 +8,11 @@
 
 ;;; Selection and Navigation
 
-(define-flamegraph-command (com-select-trace :name t) ((trace t))
-  (setf (selected-traces clim:*application-frame*) (list trace)))
+(define-flamegraph-command (com-select-trace :name t) ((trace trace))
+  (let ((traces (make-hash-table :test #'eq))
+        (thread (aref (first trace) 1)))
+    (setf (gethash thread traces) (list trace))
+    (setf (selected-traces clim:*application-frame*) traces)))
 
 (clim:define-presentation-to-command-translator select-trace
     (trace com-select-trace flamegraph)
