@@ -16,6 +16,22 @@
     (trace)
   `(,trace))
 
+(define-flamegraph-command (com-reset-view :name t) ()
+  (let ((state (state (clim:find-pane-named clim:*application-frame* 'flamegraph))))
+    (setf (%root state) nil
+          (scale state) 0)))
+
+(clim:define-presentation-to-command-translator blank-area->reset-view
+    (clim:blank-area com-reset-view flamegraph
+     :gesture :select
+     :tester ((object window)
+              (typep window 'flamegraph-pane))
+     :documentation
+     ((stream)
+      (format stream "Show whole flamegraph and reset zoom")))
+    (blank-area)
+  '())
+
 (define-flamegraph-command (com-zoom-call :name t) ((function call))
   (let ((state (state (clim:find-pane-named clim:*application-frame* 'flamegraph))))
     (setf (%root state) function
