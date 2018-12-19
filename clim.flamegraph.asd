@@ -15,7 +15,8 @@
 
                 "alexandria"
 
-                "mcclim")
+                "mcclim"
+                "mcclim-raster-image")
 
   :components  ((:module     "src"
                  :serial     t

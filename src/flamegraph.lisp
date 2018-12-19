@@ -243,6 +243,12 @@
                            (values (+ new-x 16) 0))))))
              (thread-tree-children object))))
 
+(defun present-flamegraph (state stream)
+  (when-let ((tree (or (root        state)
+                       (thread-tree state))))
+    (clim:present tree 'call-tree :stream stream :view state)
+    t))
+
 ;;; Pane
 
 (defclass flamegraph-pane (clim:application-pane)
@@ -263,11 +269,9 @@
                                      :force-p t))))
 
 (defun display-flame-graph (frame pane)
-  (let ((state (state pane)))
-    (when-let ((tree (or (root        state)
-                         (thread-tree state))))
-      (clim:present tree 'call-tree :stream pane :view state)
-      (clim:change-space-requirements pane :resize-frame nil))))
+  (declare (ignore frame))
+  (when (present-flamegraph (state pane) pane)
+    (clim:change-space-requirements pane :resize-frame nil)))
 
 ;; TODO this is a recurring pattern
 (defmethod clim:redisplay-frame-pane :around ((frame clim:application-frame)

@@ -82,3 +82,16 @@
   ; (describe sb-sprof::*samples* *trace-output*)
   ; (describe (traces clim:*application-frame*) *trace-output*)
   )
+
+;;; Exporting
+
+(define-flamegraph-command (com-export-flamegraph-image :name t)
+    ((filename pathname :prompt "Filename"))
+  (let* ((frame  clim:*application-frame*)
+         (pane   (clim:find-pane-named frame 'flamegraph))
+         (state  (state pane))
+         (width  (clim:bounding-rectangle-max-x pane))
+         (height (clim:bounding-rectangle-max-y pane)))
+    (mcclim-raster-image:with-output-to-raster-image-file
+        (stream filename :width width :height height)
+      (present-flamegraph state stream))))
