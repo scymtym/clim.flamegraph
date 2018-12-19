@@ -136,8 +136,6 @@
           (clim:draw-text* stream text (+ x (/ width 2)) (+ y (/ height 2))
                            :align-x :center :align-y :center
                            :text-style style)))
-      (setf (clim:stream-cursor-position stream)
-            (values x (nth-value 1 (clim:stream-cursor-position stream))))
 
       ;; FIXME This doesn't work. why?
       #+no (surrounding-output-with-border (stream :padding 1
@@ -160,7 +158,8 @@
   (clim:make-text-style :fix nil :small))
 
 (labels ((info-text (node)
-           (let ((*print-right-margin* nil))
+           (let ((*print-right-margin* nil)
+                 (*print-miser-width*  nil))
              (format nil "~S, ~:D hit~:P"
                      (sb-sprof::node-name (node-call node))
                      (node-count node))))
@@ -205,10 +204,10 @@
     (labels ((present-node (node &optional (depth 0) (position 0))
                (let* ((presentation (clim:present node `(call ,depth ,position ,scale)
                                                   :stream stream :view view :single-box t))
+                      (x            (clim:bounding-rectangle-min-x presentation))
                       (y            (clim:bounding-rectangle-max-y presentation))
                       (position     0))
-                 (setf (clim:stream-cursor-position stream)
-                       (values (clim:stream-cursor-position stream) y))
+                 (setf (clim:stream-cursor-position stream) (values x y))
                  (when (< depth depth-limit)
                    (map nil (lambda (child)
                               (let* ((child-presentation
