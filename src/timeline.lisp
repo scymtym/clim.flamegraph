@@ -31,7 +31,11 @@
   (let ((scale (time-scale view)))
     (with-accessors ((start start) (end end)) object
       (clim:draw-rectangle* stream (* scale start) 0 (* scale end) 1
-                            :ink +interval-ink+))))
+                            ;; :ink +interval-ink+
+                            :filled         nil
+                            :ink            clim:+dark-gray+
+                            :line-thickness 2
+                            :line-dashes    #(2 2)))))
 
 (flet ((update-selection (frame interval)
          (with-accessors ((start start) (end end)) interval
