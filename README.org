@@ -3,6 +3,9 @@
 #+EMAIL:    jmoringe@techfak.uni-bielefeld.de
 #+LANGUAGE: en
 
+#+OPTIONS: num:nil toc:nil
+#+SEQ_TODO: TODO STARTED | DONE
+
 * Introduction
 
   The ~clim.flamegraph~ system is a proof of concept application for
@@ -18,3 +21,22 @@
   enough, try using that SBCL version.*
 
 * TODO Tutorial
+
+* STARTED Glossary
+
+  + <<glossary:run>> run :: A run is a collection of coherent [[glossary:trace][traces]],
+       usually collected in a single profiling session.
+
+       A run can contain [[glossary:trace][traces]] for multiple threads.
+
+  + <<glossary:trace>> trace :: A trace is a snapshot of a thread's
+       execution state (i.e. stack trace) at a given time. It is an
+       ordered sequence of [[glossary:sample][samples]] describing the stack of active
+       function invocations.
+
+  + <<glossary:sample>> sample :: A sample is a representation of an
+       active function invocation in a given thread at a given time.
+
+  + <<glossary:node>> node ::
+
+  + <<glossary:region>> region ::
