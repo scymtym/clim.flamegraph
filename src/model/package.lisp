@@ -1,6 +1,7 @@
 (cl:defpackage #:clim.flamegraph.model
   (:use
-   #:cl)
+   #:cl
+   #:alexandria)
 
   (:shadow
    #:time)
@@ -9,9 +10,11 @@
   (:export
    #:name)
 
-  ;; Temporal range protocol
+  ;; Temporal interval protocol
   (:export
-   )
+   #:finished?
+   #:start-time
+   #:end-time)
 
   ;; Thread protocol (extends name protocol)
   (:export
@@ -19,8 +22,6 @@
 
   ;; Run protocol
   (:export
-   #:start-time
-   #:end-time
    #:map-threads
    #:map-traces)
 
@@ -42,5 +43,6 @@
   ;; Tree protocol
   (:export
    #:map-threads)
+
   (:export
    #:name-mixin))
