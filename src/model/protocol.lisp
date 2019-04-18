@@ -6,8 +6,6 @@
 
 ;;; Temporal interval protocol
 
-(defgeneric finished? (interval))
-
 (defgeneric start-time (interval))
 
 (defgeneric end-time (interval))
@@ -16,11 +14,27 @@
 
 ;;; Default behavior
 
+(defmethod duration ((interval t))
+  (- (end-time interval) (start-time interval)))
+
+;;;
+
+(defgeneric finished? (interval))
+
+(defgeneric end-time* (interval))
+
+(defgeneric duration* (interval))
+
+;;; Default behavior
+
 (defmethod finished? ((interval t))
   (not (null (end-time interval))))
 
-(defmethod duration ((interval t))
-  (- (end-time interval) (start-time interval)))
+(defmethod end-time* ((interval t))
+  (or (end-time interval) (/ (get-internal-real-time) internal-time-units-per-second)))
+
+(defmethod duration* ((interval t))
+  (- (end-time* interval) (start-time interval)))
 
 ;;; Run protocol
 ;;;
@@ -67,4 +81,4 @@
 
 ;;; Tree protocol
 
-(defgeneric map-threads (tree)) ; TODO clashes with run protocol
+(defgeneric map-threads (function tree)) ; TODO clashes with run protocol

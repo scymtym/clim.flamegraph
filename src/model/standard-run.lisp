@@ -2,7 +2,8 @@
 
 ;;; `standard-run'
 
-(defclass standard-run (temporal-interval-mixin)
+(defclass standard-run (temporal-interval-mixin
+                        print-items:print-items-mixin)
   ((%traces  :reader  traces
              :writer  (setf %traces))
    (%threads :reader  threads
@@ -27,9 +28,13 @@
         (traces-supplied?
          (setf (%threads instance) (threads-in-traces traces)))))
 
+(defmethod print-items:print-items append ((object standard-run))
+  `((:thread-count ,(length (threads object)) " ~:D thread~:P" ((:after :duration)))
+    (:trace-count  ,(length (traces object))  " ~:D trace~:P"  ((:after :thread-count)))))
+
 ;;; `standard-trace'
 
-(defclass standard-trace ()
+(defclass standard-trace (print-items:print-items-mixin)
   ((%thread  :initarg :thread
              :reader  thread)
    (%time    :initarg :time
@@ -39,6 +44,9 @@
 
 (defmethod map-samples ((function function) (trace standard-trace))
   (map nil function (samples trace)))
+
+(defmethod print-items:print-items append ((object standard-trace))
+  `((:sample-count ,(length (samples object)) "~:D sample~:P")))
 
 ;;; `standard-thread'
 
