@@ -17,7 +17,8 @@
   (:export
    #:finished?
    #:start-time
-   #:end-time)
+   #:end-time
+   #:duration)
 
   ;; Thread protocol (extends name protocol)
   (:export

@@ -2,7 +2,7 @@
 
 ;;; `name-mixin'
 
-(defclass name-mixin (print-items:print-items-mixin)
+(defclass name-mixin ()
   ((%name :initarg :name
           :reader  name))
   (:default-initargs
@@ -11,9 +11,17 @@
 (defmethod print-items:print-items append ((object name-mixin))
   `((:name ,(name object) "~A")))
 
+;;; `temporal-point-mixin'
+
+(defclass temporal-point-mixin ()
+  ((%time :initarg :time
+          :reader  time))
+  (:default-initargs
+   :time (error "Missing required :TIME initarg")))
+
 ;;; `temporal-interval-mixin'
 
-(defclass temporal-interval-mixin (print-items:print-items-mixin)
+(defclass temporal-interval-mixin ()
   ((%start-time :initarg  :start-time
                 :reader   start-time)
    (%end-time   :initarg  :end-time

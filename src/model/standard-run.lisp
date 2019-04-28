@@ -34,11 +34,10 @@
 
 ;;; `standard-trace'
 
-(defclass standard-trace (print-items:print-items-mixin)
+(defclass standard-trace (temporal-point-mixin
+                          print-items:print-items-mixin)
   ((%thread  :initarg :thread
              :reader  thread)
-   (%time    :initarg :time
-             :reader  time)
    (%samples :initarg :samples
              :reader  samples)))
 
