@@ -79,6 +79,14 @@
 
 (defgeneric children (node))
 
+(defmethod children ((node t))
+  '())
+
+(defmethod depth ((node t))
+  (if-let ((children (children node)))
+    (reduce #'max children :key #'depth)
+    0))
+
 ;;; Tree protocol
 
 (defgeneric map-threads (function tree)) ; TODO clashes with run protocol

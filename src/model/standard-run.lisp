@@ -1,3 +1,9 @@
+;;;; standard-run.lisp --- Default implementations of run, trace, etc. protocols
+;;;;
+;;;; Copyright (C) 2019 Jan Moringen
+;;;;
+;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
+
 (cl:in-package #:clim.flamegraph.model)
 
 ;;; `standard-run'
@@ -32,6 +38,9 @@
   `((:thread-count ,(length (threads object)) " ~:D thread~:P" ((:after :duration)))
     (:trace-count  ,(length (traces object))  " ~:D trace~:P"  ((:after :thread-count)))))
 
+(defmethod map-traces ((function function) (run standard-run))
+  (map nil function (traces run)))
+
 ;;; `standard-trace'
 
 (defclass standard-trace (temporal-point-mixin
@@ -54,5 +63,6 @@
 
 ;;; `standard-sample'
 
-(defclass standard-sample (name-mixin)
+(defclass standard-sample (name-mixin
+                           print-items:print-items-mixin)
   ())

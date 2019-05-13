@@ -1,3 +1,9 @@
+;;;; standard-tree.lisp --- Default implementations of the tree and node protocols
+;;;;
+;;;; Copyright (C) 2019 Jan Moringen
+;;;;
+;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
+
 (cl:in-package #:clim.flamegraph.model)
 
 ;;; `standard-tree'

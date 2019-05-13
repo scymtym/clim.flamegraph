@@ -1,3 +1,9 @@
+;;;; package.lisp --- Package definition for the model module.
+;;;;
+;;;; Copyright (C) 2019 Jan Moringen
+;;;;
+;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
+
 (cl:defpackage #:clim.flamegraph.model
   (:use
    #:cl
@@ -32,7 +38,7 @@
   ;; Trace protocol
   (:export
    #:thread
-   #:time
+   #:time ; TODO temporal point/event protocol
    #:map-samples)
 
   ;; Sample protocol (extends name protocol)
