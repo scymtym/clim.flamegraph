@@ -84,7 +84,7 @@
 
 (defmethod depth ((node t))
   (if-let ((children (children node)))
-    (reduce #'max children :key #'depth)
+    (1+ (reduce #'max children :key #'depth))
     0))
 
 ;;; Tree protocol
