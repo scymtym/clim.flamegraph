@@ -1,8 +1,7 @@
 (defsystem "clim.flamegraph.model"
   :version     (:read-file-form "version-string.sexp")
   :depends-on  ("alexandria"
-                "utilities.print-items"
-                "text.orders-of-magnitude")
+                "utilities.print-items")
 
   :components  ((:module     "model"
                  :pathname   "src/model"

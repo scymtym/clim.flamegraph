@@ -9,9 +9,6 @@
    #:cl
    #:alexandria)
 
-  (:local-nicknames
-   (#:om #:text.orders-of-magnitude))
-
   (:shadow
    #:time)
 
