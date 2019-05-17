@@ -136,6 +136,28 @@
        (apply function args)
     (note-leave name)))
 
+(defun note-unblock (name lock)
+  (with-recording-state (state)
+    (let* ((thread-state (ensure-gethash (bt:current-thread) state (make-thread-state)))
+           (stack        (thread-state-stack thread-state))
+           (top          (let ((index (fill-pointer stack)))
+                           (when (plusp index)
+                             (aref stack (1- index)))))
+           (new          (make-instance 'model::wait-region
+                                        :name       name
+                                        :start-time (real-time)
+                                        :lock       lock)))
+      (if top
+          (push new (model:children top))
+          (vector-push-extend new (thread-state-roots thread-state)))
+      (vector-push-extend new stack))))
+
+(defun call-and-record/unblock (name function &rest args)
+  (note-unblock name (first args))
+  (unwind-protect
+       (apply function args)
+    (note-leave name)))
+
 (defun record-name (name &key (recorder (curry #'call-and-record name)))
   (print name)
   (sb-int:unencapsulate name 'recorder)
@@ -165,11 +187,13 @@
   (dolist (name '(sb-unix::nanosleep-float sb-unix::nanosleep-double sb-unix::nanosleep))
     (record-name name :recorder (curry #'call-and-record/block name)))
 
+  (record-name 'sb-ext:process-wait :recorder (curry #'call-and-record/block 'sb-ext:process-wait))
+
   (record-name 'sb-thread:condition-wait :recorder (curry #'call-and-record/block 'sb-thread:condition-wait))
   (record-name 'sb-thread:join-thread :recorder (curry #'call-and-record/block 'sb-thread:join-thread))
-  (record-name 'sb-thread:grab-mutex :recorder (curry #'call-and-record/block 'sb-thread:grab-mutex))
 
-  (record-name 'sb-ext:process-wait :recorder (curry #'call-and-record/block 'sb-ext:process-wait)))
+  (record-name 'sb-thread:grab-mutex :recorder (curry #'call-and-record/block 'sb-thread:grab-mutex))
+  (record-name 'sb-thread:release-mutex :recorder (curry #'call-and-record/block 'sb-thread:release-mutex)))
 
 (defun record-io ()
   (dolist (name '(read-character read-character-no read-line read-sequence))))
