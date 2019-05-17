@@ -20,25 +20,39 @@
 
 (defvar *last-state*)
 
-(defun detach! (result)
-  (maphash (lambda (thread state)
-             (map nil (named-lambda rec (node)
-                        (reinitialize-instance node :name (let ((name (model:name node)))
-                                                            (typecase name
-                                                              (symbol (make-instance 'model::qualified-name
-                                                                                     :container (package-name (symbol-package name))
-                                                                                     :name      (symbol-name name)))
-                                                              (t (princ-to-string name)))))
-                        (when (compute-applicable-methods #'model::values* (list node))
-                          (reinitialize-instance node :values (let ((*print-level* 3) (*print-length* 5))
-                                                                (map 'list #'princ-to-string (model::values* node)))))
-                        (when (compute-applicable-methods #'model::lock (list node))
-                          (reinitialize-instance node :lock (let ((*print-level* 3) (*print-length* 5))
-                                                                (princ-to-string (model::lock node)))))
-                        (map nil #'rec (model:children node)))
-                  (thread-state-roots state)))
-           result)
-  result)
+(defun detach! (recording-state)
+  (let ((result (make-hash-table :test #'eq))
+        (seen   (make-hash-table :test #'eq)))
+    (maphash (lambda (thread state)
+               (map nil (named-lambda rec (node)
+                          (reinitialize-instance node :name (let ((name (model:name node)))
+                                                              (typecase name
+                                                                (symbol (ensure-gethash
+                                                                         name seen
+                                                                         (make-instance 'model::qualified-name
+                                                                                        :container (package-name (symbol-package name))
+                                                                                        :name      (symbol-name name))))
+                                                                (t (ensure-gethash
+                                                                    name seen
+                                                                    (princ-to-string name))))))
+                          (when (compute-applicable-methods #'model::values* (list node))
+                            (reinitialize-instance node :values (map 'list (lambda (v)
+                                                                             (ensure-gethash
+                                                                              v seen
+                                                                              (let ((*print-level* 3) (*print-length* 5))
+                                                                                (princ-to-string v))))
+                                                                     (model::values* node))))
+                          (when (compute-applicable-methods #'model::lock (list node))
+                            (reinitialize-instance node :lock (let ((lock (model::lock node)))
+                                                                (ensure-gethash
+                                                                 lock seen
+                                                                 (let ((*print-level* 3) (*print-length* 5))
+                                                                   (princ-to-string lock))))))
+                          (map nil #'rec (model:children node)))
+                    (thread-state-roots state))
+               (setf (gethash (princ-to-string thread) result) state))
+             recording-state)
+    result))
 
 (defun call-with-recording (thunk)
   (let ((state (make-hash-table :test #'eq :synchronized t)))
