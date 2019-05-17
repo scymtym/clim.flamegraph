@@ -53,9 +53,10 @@
   `(call-with-recording (lambda () ,@body)))
 
 (defmacro with-recording-state ((state-var) &body body)
-  `(when-let ((,state-var *recording-state*))
-     (let ((*recording-state* nil))
-       ,@body)))
+  `(#+sbcl sb-sys:without-interrupts #-sbcl progn
+    (when-let ((,state-var *recording-state*))
+      (let ((*recording-state* nil))
+        ,@body))))
 
 (defun note-enter (name values)
   (with-recording-state (state)
