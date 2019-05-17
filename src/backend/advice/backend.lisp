@@ -188,6 +188,9 @@
     (record-name name :recorder (curry #'call-and-record/block name)))
 
   (record-name 'sb-ext:process-wait :recorder (curry #'call-and-record/block 'sb-ext:process-wait))
+  (record-name 'sb-impl::waitpid :recorder (curry #'call-and-record/block 'sb-impl::waitpid))
+  (record-name 'sb-impl::get-processes-status-changes)
+
 
   (record-name 'sb-thread:condition-wait :recorder (curry #'call-and-record/block 'sb-thread:condition-wait))
   (record-name 'sb-thread:join-thread :recorder (curry #'call-and-record/block 'sb-thread:join-thread))
