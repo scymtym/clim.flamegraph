@@ -21,6 +21,7 @@
 (defvar *last-state*)
 
 (defun detach! (recording-state)
+  (sb-ext:gc :full t)
   (let ((result (make-hash-table :test #'eq))
         (seen   (make-hash-table :test #'eq)))
     (maphash (lambda (thread state)
@@ -52,6 +53,7 @@
                     (thread-state-roots state))
                (setf (gethash (princ-to-string thread) result) state))
              recording-state)
+    (sb-ext:gc :full t)
     result))
 
 (defun call-with-recording (thunk)
