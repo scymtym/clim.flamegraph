@@ -1,4 +1,4 @@
-;;;; standard-region.lisp --- 
+;;;; standard-region.lisp ---
 ;;;;
 ;;;; Copyright (C) 2019 Jan Moringen
 ;;;;
@@ -16,7 +16,7 @@
 #+maybe (defmethod print-items:print-items append ((object region))
   (let+ (((&accessors-r/o name duration) object))
     `((:name        ,name)
-      (:duration    ,duration " ~/om:print-human-readable-duration/" ((:after :name))))))
+      (:duration    ,duration " ~/text.orders-of-magnitude:print-human-readable-duration/" ((:after :name))))))
 
 (defmethod start-time :around ((object standard-region)) ; TODO temp
   (/ (call-next-method) 1000000))
