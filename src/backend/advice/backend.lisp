@@ -253,19 +253,3 @@
 (defun record-notable ()
   (dolist (name '(compile intern))
     (record-name name)))
-
-;;; Events
-
-
-
-(defmethod model::time :around ((object standard-event)) ; TODO temp
-  (/ (call-next-method) 1000000))
-
-(defun note-global-event (name &rest properties &key &allow-other-keys)
-  (print (list :note-global-event name properties) *trace-output*)
-  (with-thread-state (state :global)
-    (let ((new (make-instance 'standard-event
-                              :name       name
-                              :time       (time:real-time)
-                              :properties properties)))
-      (vector-push-extend new (thread-state-roots state)))))
