@@ -56,7 +56,7 @@
 
 (defstruct (recording-state
             (:constructor make-recording-state ()))
-  (recording?    nil                                          :type boolean)
+  (recording?    nil                                          :type (or (eql :terminating) boolean))
   (thread-states (make-hash-table :test #'eq :synchronized t) :type hash-table :read-only t))
 
 ;;;

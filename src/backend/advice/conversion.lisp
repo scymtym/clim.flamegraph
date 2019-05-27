@@ -15,11 +15,14 @@
                   (make-instance 'thread-aggregation-state :thread thread)))
 
 (defun work (run source)
-  (loop :with  aggregation-state = (make-instance 'aggregation-state)
-        :for   state             = *recording-state*
-        :while state
-        :do (process-state run source state aggregation-state)
-            (sleep .01)))
+  (loop :with aggregation-state = (make-instance 'aggregation-state)
+        :for  state             = *recording-state*
+        :when state
+        :do   (process-state run source state aggregation-state)
+              (when (eq (recording-state-recording? state) :terminating)
+                (process-state run source state aggregation-state)
+                (return))
+              (sleep .01)))
 
 (defun process-state (run source state aggregation-state)
   (maphash (lambda (thread thread-state)

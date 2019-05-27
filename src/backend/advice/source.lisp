@@ -24,5 +24,7 @@
   (setf (recording-state-recording? *recording-state*) nil))
 
 (defmethod recording:teardown ((source source) (run t))
-  (setf *recording-state* nil)
-  (bt:join-thread (thread source)))
+  (setf (recording-state-recording? *recording-state*) :terminating)
+  (bt:join-thread (thread source))
+
+  (setf *recording-state* nil))
