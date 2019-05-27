@@ -1,166 +1,213 @@
+;;;; backend.lisp ---
+;;;;
+;;;; Copyright (C) 2019 Jan Moringen
+;;;;
+;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.DE>
+
 (cl:in-package #:clim.flamegraph.backend.advice)
 
-(defun real-time ()
-  (multiple-value-bind (seconds microseconds)
-      (sb-unix::get-time-of-day)
-    (+ (* 1000000 seconds) microseconds)))
+(defstruct (event
+            (:constructor make-event))
+  (kind)
+  (name)
+  (time)
+  (data))
 
-(defconstant time-units-per-second
-  1000000)
+(defconstant +event-ring-buffer-size+ 65536)
+
+(defun make-event-ring-buffer ()
+  (coerce (loop :repeat +event-ring-buffer-size+ :collect (make-event))
+          `(simple-array event (,+event-ring-buffer-size+))))
 
 (defstruct (thread-state
             (:constructor make-thread-state ())
             (:copier nil)
             (:predicate nil))
-  (recording? t                                            :type boolean)
-  (roots      (make-array 0 :adjustable t :fill-pointer 0) :type (array t 1) :read-only t)
-  (stack      (make-array 0 :adjustable t :fill-pointer 0) :type (array t 1) :read-only t))
+  (recording? t                        :type boolean)
+  (events     (make-event-ring-buffer) :type (simple-array t (#.+event-ring-buffer-size+)) :read-only t)
+  (read-head  0                        :type array-index)
+  (write-head 0                        :type array-index))
+
+(defun produce-event (thread-state)
+  (let ((write-head (thread-state-write-head thread-state)))
+    (aref (thread-state-events thread-state) (mod write-head +event-ring-buffer-size+)) ; TODO magic number
+    ))
+
+(defun maybe-produce-event (thread-state)
+  (let ((read-head  (thread-state-read-head thread-state))
+        (write-head (thread-state-write-head thread-state)))
+    (when (< (- write-head read-head) +event-ring-buffer-size+)
+      (produce-event thread-state))))
+
+(defun commit-event (thread-state)
+  (incf (thread-state-write-head thread-state)))
+
+(defun consume-event (thread-state)
+  (let ((read-head (thread-state-read-head thread-state)))
+    (prog1
+        (aref (thread-state-events thread-state) (mod read-head +event-ring-buffer-size+))
+      (setf (thread-state-read-head thread-state) (1+ read-head)))))
+
+(defun maybe-consume-event (thread-state)
+  (let ((read-head  (thread-state-read-head thread-state))
+        (write-head (thread-state-write-head thread-state)))
+    (when (< read-head write-head)
+      (consume-event thread-state))))
+
+(defstruct (recording-state
+            (:constructor make-recording-state ()))
+  (recording?    nil                                          :type boolean)
+  (thread-states (make-hash-table :test #'eq :synchronized t) :type hash-table :read-only t))
+
+;;;
 
 (defvar *recording-state* nil)
 
-(defvar *last-state*)
+(defvar *thread-state* nil)
 
-(defun detach! (recording-state)
-  (sb-ext:gc :full t)
-  (let ((result (make-hash-table :test #'eq))
-        (seen   (make-hash-table :test #'eq)))
-    (maphash (lambda (thread state)
-               (map nil (named-lambda rec (node)
-                          (reinitialize-instance node :name (let ((name (model:name node)))
-                                                              (typecase name
-                                                                (symbol (ensure-gethash
-                                                                         name seen
-                                                                         (make-instance 'model::qualified-name
-                                                                                        :container (package-name (symbol-package name))
-                                                                                        :name      (symbol-name name))))
-                                                                (t (ensure-gethash
-                                                                    name seen
-                                                                    (princ-to-string name))))))
-                          (when (compute-applicable-methods #'model::values* (list node))
-                            (reinitialize-instance node :values (map 'list (lambda (v)
-                                                                             (ensure-gethash
-                                                                              v seen
-                                                                              (let ((*print-level* 3) (*print-length* 5))
-                                                                                (princ-to-string v))))
-                                                                     (model::values* node))))
-                          (when (compute-applicable-methods #'model::lock (list node))
-                            (reinitialize-instance node :lock (let ((lock (model::lock node)))
-                                                                (ensure-gethash
-                                                                 lock seen
-                                                                 (let ((*print-level* 3) (*print-length* 5))
-                                                                   (princ-to-string lock))))))
-                          (map nil #'rec (model:children node)))
-                    (thread-state-roots state))
-               (setf (gethash (princ-to-string thread) result) state))
-             recording-state)
-    (sb-ext:gc :full t)
-    result))
-
-(defun call-with-recording (thunk)
-  (let ((state (make-hash-table :test #'eq :synchronized t)))
-    (setf *recording-state* state)
-    (unwind-protect
-         (funcall thunk)
-      (setf *last-state* state)
-      (setf *recording-state* nil))
-    (detach! state)))
-
-(defmacro with-recording (() &body body)
-  `(call-with-recording (lambda () ,@body)))
+(declaim (inline ensure-thread-state))
+(defun ensure-thread-state (recording-state
+                            &optional (thread (bt:current-thread)))
+  (let ((table (recording-state-thread-states recording-state)))
+    (ensure-gethash thread table (make-thread-state))))
 
 (defmacro with-recording-state ((state-var) &body body)
   `(#+sbcl sb-sys:without-interrupts #-sbcl progn
     (when-let ((,state-var *recording-state*))
-      (let ((*recording-state* nil))
-        ,@body))))
+      (when (recording-state-recording? ,state-var)
+        (let ((*recording-state* nil))
+          ,@body)))))
 
-(defun note-enter (name values)
-  (with-recording-state (state)
-    (let* ((thread-state (ensure-gethash (bt:current-thread) state (make-thread-state)))
-           (stack        (thread-state-stack thread-state))
-           (top          (let ((index (fill-pointer stack)))
-                           (when (plusp index)
-                             (aref stack (1- index)))))
-           (values       (map 'list (lambda (value)
-                                      (if (sb-ext:stack-allocated-p value)
-                                          `(:stack-allocated ,(ignore-errors (princ-to-string value)))
-                                          value))
-                              values))
-           (new          (make-instance 'model::call-region
-                                        :name       name
-                                        :start-time (real-time)
-                                        :values     (map 'list #'princ-to-string values))))
-      (if top
-          (push new (model:children top))
-          (vector-push-extend new (thread-state-roots thread-state)))
-      (vector-push-extend new stack))))
+(defmacro with-thread-state ((state-var &optional thread) &body body)
+  (alexandria:with-gensyms (recording-state)
+    `(with-recording-state (,recording-state)
+       (let ((,state-var (ensure-thread-state
+                          ,recording-state ,@(when thread `(,thread)))))
+         (when (thread-state-recording? ,state-var)
+           ,@body)))))
 
-(defun note-leave (name)
-  (with-recording-state (state)
-    (when-let* ((thread-state (gethash (bt:current-thread) state))
-                (stack        (thread-state-stack thread-state))
-                (top          (let ((index (fill-pointer stack)))
-                                (when (plusp index)
-                                  (aref stack (1- index))))))
-      (when (and top (eq (model:name top) name))
-        (setf (model:end-time top) (real-time))
-        (vector-pop stack)))))
+(defmacro with-recording-state2 ((state-var) recording-body normal-body)
+  `(#+sbcl sb-sys:without-interrupts #-sbcl progn
+    (let ((,state-var *recording-state*))
+      (if (and ,state-var (recording-state-recording? ,state-var))
+          (#+sbcl sb-sys:allow-with-interrupts #-sbcl progn
+           ,recording-body)
+          (#+sbcl sb-sys:with-local-interrupts #-sbcl progn ; TODO can we not disable interrupts when not recording?
+            ,normal-body)))))
+
+(defmacro with-thread-state2 ((state-var &optional thread)
+                              recording-body normal-body)
+  (alexandria:with-gensyms
+      (recording-state recording-thunk normal-thunk with-state-thunk)
+    `(labels ((,recording-thunk (,state-var)
+                ,recording-body)
+              (,normal-thunk ()
+                ,normal-body)
+              (,with-state-thunk (,state-var)
+                (if (thread-state-recording? ,state-var)
+                    (,recording-thunk ,state-var)
+                    (,normal-thunk))))
+       (with-recording-state2 (,recording-state)
+         (if-let ((,state-var *thread-state*))
+           (,with-state-thunk ,state-var)
+           (let* ((,state-var     (ensure-thread-state
+                                   ,recording-state ,@(when thread `(,thread))))
+                  (*thread-state* ,state-var))
+             (,with-state-thunk ,state-var)))
+         (,normal-thunk)))))
+
+(defun call-and-record2 (name function &rest args)
+  ;; (declare (dynamic-extent args))
+  (with-thread-state2 (state) ; TODO bind special so nested calls can avoid thread lookup?
+    (progn
+      (let ((*recording-state* nil)
+            (*thread-state*    nil)) ; TODO flip flag in state?
+        (note-enter state name args))
+      (unwind-protect
+           (sb-sys:with-interrupts
+             (apply function args))
+        (let ((*recording-state* nil)
+              (*thread-state*    nil))
+          (note-leave state name))))
+    (apply function args)))
+
+;;;
+
+
+
+(defun note-enter (state name values)
+  (when-let ((event (produce-event state)))
+    (setf (event-kind event) :enter
+          (event-time event) (time:real-time)
+          (event-name event) name
+          (event-data event) (map 'list (lambda (value)
+                                          (if (sb-ext:stack-allocated-p value)
+                                              `(:stack-allocated ,(ignore-errors (princ-to-string value)))
+                                              value))
+                                  values))
+    (commit-event state)))
+
+(defun note-leave (state name)
+  (when-let ((event (produce-event state)))
+    (setf (event-kind event) :leave
+          (event-time event) (time:real-time)
+          (event-name event) name)
+    (commit-event state)))
 
 (defun call-and-record (name function &rest args)
-  (note-enter name args)
-  (let ((values))
-    (unwind-protect
-         (progn
-           (setf values (multiple-value-list (apply function args)))
-           (values-list values))
-      (note-leave name)              ; values
-      )))
+  (with-thread-state (state)
+    (note-enter state name args)
+    (let ((values))
+      (unwind-protect
+           (progn
+             (setf values (multiple-value-list (apply function args)))
+             (values-list values))
+        (note-leave state name)              ; values
+        ))))
 
-(defun note-block (name lock)
-  (with-recording-state (state)
-    (let* ((thread-state (ensure-gethash (bt:current-thread) state (make-thread-state)))
-           (stack        (thread-state-stack thread-state))
-           (top          (let ((index (fill-pointer stack)))
-                           (when (plusp index)
-                             (aref stack (1- index)))))
-           (new          (make-instance 'model::wait-region
-                                        :name       name
-                                        :start-time (real-time)
-                                        :lock       lock)))
+#+later (defun note-block (name lock)
+  (with-thread-state (state)
+    (let* ((stack (thread-state-stack state))
+           (top   (let ((index (fill-pointer stack)))
+                    (when (plusp index)
+                      (aref stack (1- index)))))
+           (new   (make-instance 'model::wait-region
+                                 :name       name
+                                 :start-time (time:real-time)
+                                 :lock       lock)))
       (if top
           (push new (model:children top))
-          (vector-push-extend new (thread-state-roots thread-state)))
+          (vector-push-extend new (thread-state-roots state)))
       (vector-push-extend new stack))))
 
-(defun call-and-record/block (name function &rest args)
+#+later (defun call-and-record/block (name function &rest args)
   (note-block name (first args))
   (unwind-protect
        (apply function args)
-    (note-leave name)))
+    (note-leave state name)))
 
-(defun note-unblock (name lock)
-  (with-recording-state (state)
-    (let* ((thread-state (ensure-gethash (bt:current-thread) state (make-thread-state)))
-           (stack        (thread-state-stack thread-state))
-           (top          (let ((index (fill-pointer stack)))
-                           (when (plusp index)
-                             (aref stack (1- index)))))
-           (new          (make-instance 'model::wait-region
-                                        :name       name
-                                        :start-time (real-time)
-                                        :lock       lock)))
+#+later (defun note-unblock (name lock)
+  (with-thread-state (state)
+    (let* ((stack (thread-state-stack state))
+           (top   (let ((index (fill-pointer stack)))
+                    (when (plusp index)
+                      (aref stack (1- index)))))
+           (new   (make-instance 'model::wait-region
+                                 :name       name
+                                 :start-time (time:real-time)
+                                 :lock       lock)))
       (if top
           (push new (model:children top))
-          (vector-push-extend new (thread-state-roots thread-state)))
+          (vector-push-extend new (thread-state-roots state)))
       (vector-push-extend new stack))))
 
-(defun call-and-record/unblock (name function &rest args)
+#+later (defun call-and-record/unblock (name function &rest args)
   (note-unblock name (first args))
   (unwind-protect
        (apply function args)
     (note-leave name)))
 
-(defun record-name (name &key (recorder (curry #'call-and-record name)))
+(defun record-name (name &key (recorder (curry #'call-and-record2 name)))
   (print name)
   (sb-int:unencapsulate name 'recorder)
   (sb-int:encapsulate name 'recorder recorder))
@@ -209,21 +256,16 @@
 
 ;;; Events
 
-(defclass standard-event (model:name-mixin
-                          model::temporal-point-mixin
-                          print-items:print-items-mixin)
-  ((%properties :initarg :properties
-                :reader  model::properties)))
+
 
 (defmethod model::time :around ((object standard-event)) ; TODO temp
   (/ (call-next-method) 1000000))
 
 (defun note-global-event (name &rest properties &key &allow-other-keys)
   (print (list :note-global-event name properties) *trace-output*)
-  (with-recording-state (state)
-    (let* ((thread-state (ensure-gethash :global state (make-thread-state)))
-           (new          (make-instance 'standard-event
-                                        :name       name
-                                        :time       (real-time)
-                                        :properties properties)))
-      (vector-push-extend new (thread-state-roots thread-state)))))
+  (with-thread-state (state :global)
+    (let ((new (make-instance 'standard-event
+                              :name       name
+                              :time       (time:real-time)
+                              :properties properties)))
+      (vector-push-extend new (thread-state-roots state)))))

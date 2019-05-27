@@ -1,3 +1,9 @@
+;;;; protocol.lisp --- Protocol functions provided by the backend.advice module.
+;;;;
+;;;; Copyright (C) 2019 Jan Moringen
+;;;;
+;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
+
 (cl:in-package #:clim.flamegraph.region)
 
 ;;; Region protocol

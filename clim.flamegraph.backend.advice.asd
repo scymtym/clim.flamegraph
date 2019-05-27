@@ -4,10 +4,13 @@
                 "bordeaux-threads"
                 "utilities.print-items"
 
-                "clim.flamegraph.model")
+                "clim.flamegraph.model"
+                "clim.flamegraph.recording")
 
   :components  ((:module     "backend-advice"
                  :pathname   "src/backend/advice"
                  :serial     t
                  :components ((:file       "package")
-                              (:file       "backend")))))
+                              (:file       "backend")
+                              (:file       "conversion")
+                              (:file       "source")))))
