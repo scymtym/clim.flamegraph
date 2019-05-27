@@ -40,7 +40,7 @@
   (sb-unix:unix-setitimer :profile 0 0 0 0))
 
 (defmethod recording:teardown ((source source) (run t))
-  (sb-sys:enable-interrupt sb-unix:sigprof :default)
+  ; (sb-sys:enable-interrupt sb-unix:sigprof :default)
 
   (setf *context* nil) ; TODO put a condition variable into the context
   (bt:join-thread (thread source)))
