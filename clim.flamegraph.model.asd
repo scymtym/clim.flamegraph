@@ -19,4 +19,5 @@
                               (:file       "standard-tree")
                               (:file       "standard-region") ; TODO maybe
                               (:file       "standard-event") ; TODO maybe
-                              ))))
+
+                              (:file       "detach")))))
