@@ -15,6 +15,20 @@
    (%threads :reader  threads
              :writer  (setf %threads))))
 
+(defun temporal-bounds-in-traces (traces)
+  (let ((start most-positive-fixnum)
+        (end   most-negative-fixnum))
+    (map nil (lambda (trace)
+               (cond ((typep trace 'temporal-point-mixin) ; TODO
+                      (let ((time (time trace)))
+                        (minf start time)
+                        (maxf end   time)))
+                     ((typep trace 'temporal-interval-mixin)
+                      (minf start (start-time trace))
+                      (maxf end   (end-time trace)))))
+         traces)
+    (values start end)))
+
 (defun threads-in-traces (traces)
   (let ((threads (make-hash-table :test #'eq)))
     (map nil (lambda (trace)
@@ -25,14 +39,23 @@
 (defmethod shared-initialize :after ((instance   standard-run)
                                      (slot-names t)
                                      &key
-                                     (traces  nil traces-supplied?)
-                                     (threads nil threads-supplied?))
+                                     start-time
+                                     end-time
+                                     (traces    nil traces-supplied?)
+                                     (threads   nil threads-supplied?))
   (when traces-supplied?
     (setf (%traces instance) traces))
   (cond (threads-supplied?
          (setf (%threads instance) threads))
         (traces-supplied?
-         (setf (%threads instance) (threads-in-traces traces)))))
+         (setf (%threads instance) (threads-in-traces traces))))
+  (when (and (or (not start-time) (not end-time))
+             traces-supplied?)
+    (multiple-value-bind (start end) (temporal-bounds-in-traces traces)
+      (unless start-time
+        (setf (slot-value instance '%start-time) start))
+      (unless end-time
+        (setf (end-time instance) end)))))
 
 (defmethod print-items:print-items append ((object standard-run))
   `((:thread-count ,(length (threads object)) " ~:D thread~:P" ((:after :duration)))
@@ -50,6 +73,9 @@
    (%samples :initarg :samples
              :reader  samples)))
 
+(defmethod time :around ((event standard-trace))
+  (/ (call-next-method) 1000000))
+
 (defmethod map-samples ((function function) (trace standard-trace))
   (map nil function (samples trace)))
 
@@ -58,8 +84,11 @@
 
 ;;; `standard-thread'
 
-(defclass standard-thread (name-mixin)
-  ())
+(defclass standard-thread (name-mixin
+                           print-items:print-items-mixin)
+  ((%native-thread :initarg :native-thread
+                   :reader native-thread) ; TODO temp hack
+   ))
 
 ;;; `standard-sample'
 

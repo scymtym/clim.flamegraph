@@ -29,4 +29,4 @@
                 :initform nil)))
 
 (defmethod print-items:print-items append ((object temporal-interval-mixin))
-  `((:duration ,(duration* object) "~A" #+later "~/text.orders-of-magnitude:print-human-readable-duration/" ((:after :name)))))
+  `((:duration ,(duration* object) " ~,6F" #+later "~/text.orders-of-magnitude:print-human-readable-duration/" ((:after :name)))))

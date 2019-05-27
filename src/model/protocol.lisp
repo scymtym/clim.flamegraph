@@ -1,3 +1,9 @@
+;;;; protocol.lisp --- Protocol functions provided by model module.
+;;;;
+;;;; Copyright (C) 2019 Jan Moringen
+;;;;
+;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
+
 (cl:in-package #:clim.flamegraph.model)
 
 ;;; Name protocol
@@ -59,7 +65,13 @@
   (:documentation
    "Return the time at which TRACE was acquired."))
 
-(defgeneric map-samples (function trace))
+(defgeneric map-samples (function trace)
+  (:documentation
+   "Call FUNCTION for each sample in TRACE.
+
+The lambda-list of FUNCTION must be compatible to
+
+  (sample)"))
 
 ;;; Sample protocol
 ;;;

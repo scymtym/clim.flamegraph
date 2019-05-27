@@ -6,6 +6,13 @@
 
 (cl:in-package #:clim.flamegraph.model)
 
+;;; `root-region-mixin'
+
+(defclass root-region-mixin ()
+  ((%thread :initarg :thread
+            :reader  thread)))
+
+
 ;;; `standard-region'
 
 (defclass standard-region (name-mixin
@@ -33,7 +40,7 @@
 
 (defclass inner-region (standard-region) ; TODO node has children as well
   ((%children :initarg  :children
-              :accessor children ; TODO adjustable-vector?
+              :accessor children        ; TODO adjustable-vector?
               :initform '())))
 
 (defmethod print-items:print-items append ((object inner-region))
@@ -44,6 +51,12 @@
 (defclass call-region (inner-region)
   ((%values :initarg :values
             :reader  values*)))
+
+;;; `root-call-region'
+
+(defclass root-call-region (root-region-mixin
+                            call-region)
+  ())
 
 ;;; `wait-region'
 
