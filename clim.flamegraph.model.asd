@@ -3,7 +3,12 @@
   :depends-on  ("alexandria"
                 "utilities.print-items")
 
-  :components  ((:module     "model"
+  :components  ((:module     "time"
+                 :pathname   "src/time"
+                 :serial     t
+                 :components ((:file       "package")))
+
+                (:module     "model"
                  :pathname   "src/model"
                  :serial     t
                  :components ((:file       "package")
