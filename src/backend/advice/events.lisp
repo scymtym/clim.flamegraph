@@ -145,19 +145,24 @@
   (record-name 'sb-impl::waitpid :recorder (curry #'recording-call/blocking 'sb-impl::waitpid))
   (record-name 'sb-impl::get-processes-status-changes)
 
-
   (record-name 'sb-thread:condition-wait :recorder (curry #'recording-call/blocking 'sb-thread:condition-wait))
   (record-name 'sb-thread:join-thread :recorder (curry #'recording-call/blocking 'sb-thread:join-thread))
 
-  (record-name 'sb-thread:grab-mutex :recorder (curry #'recording-call/block 'sb-thread:grab-mutex))
-  (record-name 'sb-thread:release-mutex :recorder (curry #'recording-call/unblock 'sb-thread:release-mutex)))
+  ; (record-name 'sb-thread:grab-mutex :recorder (curry #'recording-call/block 'sb-thread:grab-mutex))
+  ; (record-name 'sb-thread:release-mutex :recorder (curry #'recording-call/unblock 'sb-thread:release-mutex))
+  )
 
 (defun record-io ()
+  (record-name 'directory :recorder (curry #'recording-call/blocking 'directory))
+  (record-name 'open :recorder (curry #'recording-call/blocking 'open))
+  (record-name 'close :recorder (curry #'recording-call/blocking 'close))
+
+
   (record-name 'sb-bsd-sockets:get-host-by-name     :recorder (curry #'recording-call/blocking 'sb-bsd-sockets:get-host-by-name))
   (record-name 'sb-bsd-sockets:get-host-by-address  :recorder (curry #'recording-call/blocking 'sb-bsd-sockets:get-host-by-address))
   (record-name 'sb-bsd-sockets:get-protocol-by-name :recorder (curry #'recording-call/blocking 'sb-bsd-sockets:get-protocol-by-name))
 
-                                        ; open close
+
   #+no (dolist (name '(read-character read-character-no read-line read-sequence))))
 
 (defun record-notable ()
