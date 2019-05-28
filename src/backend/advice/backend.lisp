@@ -72,14 +72,14 @@
   (let ((table (recording-state-thread-states recording-state)))
     (ensure-gethash thread table (make-thread-state))))
 
-(defmacro with-recording-state ((state-var) &body body)
+#+unused (defmacro with-recording-state ((state-var) &body body)
   `(#+sbcl sb-sys:without-interrupts #-sbcl progn
     (when-let ((,state-var *recording-state*))
       (when (recording-state-recording? ,state-var)
         (let ((*recording-state* nil))
           ,@body)))))
 
-(defmacro with-thread-state ((state-var &optional thread) &body body)
+#+unsed (defmacro with-thread-state ((state-var &optional thread) &body body)
   (alexandria:with-gensyms (recording-state)
     `(with-recording-state (,recording-state)
        (let ((,state-var (ensure-thread-state
@@ -88,13 +88,14 @@
            ,@body)))))
 
 (defmacro with-recording-state2 ((state-var) recording-body normal-body)
-  `(#+sbcl sb-sys:without-interrupts #-sbcl progn
-    (let ((,state-var *recording-state*))
-      (if (and ,state-var (recording-state-recording? ,state-var))
+  `(let ((,state-var *recording-state*))
+     (if (and ,state-var
+              (recording-state-recording? ,state-var)
+              (not recording:*in-critical-recording-code?*))
+         (#+sbcl sb-sys:without-interrupts #-sbcl progn
           (#+sbcl sb-sys:allow-with-interrupts #-sbcl progn
-           ,recording-body)
-          (#+sbcl sb-sys:with-local-interrupts #-sbcl progn ; TODO can we not disable interrupts when not recording?
-            ,normal-body)))))
+           ,recording-body))
+         ,normal-body)))
 
 (defmacro with-thread-state2 ((state-var &optional thread)
                               recording-body normal-body)

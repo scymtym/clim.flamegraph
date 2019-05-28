@@ -3,6 +3,9 @@
    #:cl
    #:alexandria)
 
+  (:export
+   #:*in-critical-recording-code?*)
+
   ;; Recording lifecycle protocol
   (:export
    #:setup
@@ -28,3 +31,7 @@
   ;; Macros
   (:export
    #:with-recording))
+
+(cl:in-package #:clim.flamegraph.recording)
+
+(defvar *in-critical-recording-code?* nil)

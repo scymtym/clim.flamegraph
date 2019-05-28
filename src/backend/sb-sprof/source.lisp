@@ -48,7 +48,7 @@
 ;;; Worker
 
 (defun work (run source)
-  (loop :for context = *context*
+  (loop :for context = *context* ; TODO termination
         :while context
         :for trace-buffer = (maybe-consume-trace context)
         :when trace-buffer
@@ -64,8 +64,6 @@
                                   :for i :downfrom (* 2 (trace-buffer-count buffer)) :to 0 :by 2
                                   :collect (make-instance 'model::standard-sample
                                                           :name (info->name (aref samples i)))))))
-
-;;; Signal handler
 
 (defun info->name (info)
   (flet ((clean-name (name)
@@ -95,6 +93,8 @@
        (clean-name (sb-di::debug-fun-name info)))
       (t
        (coerce info 'string)))))
+
+;;; Signal handler
 
 (declaim (inline collect-stacktrace))
 (defun collect-stacktrace (scp depth-limit buffer)
@@ -153,15 +153,18 @@
            (type sb-alien:system-area-pointer scp))
   (when-let* ((context *context*)
               (thread  sb-thread:*current-thread*))
-    (when (and t #+todo (profiled-thread-p self))
-      (sb-thread::with-system-mutex (sb-sprof::*profiler-lock* :without-gcing t) ; TODO is the lock needed? is without-gcing needed?
-        (let ((depth-limit (context-depth-limit context))
-              (trace       (maybe-produce-trace context)))
-          (when (not trace)
-            ;; TODO warn about trace buffer being too small
-            (return-from sigprof-handler/cpu))
-          (setf (trace-buffer-thread trace) thread
-                (trace-buffer-time   trace) (time:real-time))
-          (collect-stacktrace scp depth-limit trace)
-          (commit-trace context)))))
+    (when (and t
+               #+todo (profiled-thread-p self)
+               (not recording:*in-critical-recording-code?*))
+      (let ((recording:*in-critical-recording-code?* t))
+        (sb-thread::with-system-mutex (sb-sprof::*profiler-lock* :without-gcing t) ; TODO is the lock needed? is without-gcing needed?
+          (let ((depth-limit (context-depth-limit context))
+                (trace       (maybe-produce-trace context)))
+            (when (not trace)
+              ;; TODO warn about trace buffer being too small
+              (return-from sigprof-handler/cpu))
+            (setf (trace-buffer-thread trace) thread
+                  (trace-buffer-time   trace) (time:real-time))
+            (collect-stacktrace scp depth-limit trace)
+            (commit-trace context))))))
   nil)
