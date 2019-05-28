@@ -23,12 +23,12 @@
                                                                  (let ((*print-level* 3) (*print-length* 5))
                                                                    (princ-to-string v))))
                                                         (values* node))))
-             (when (compute-applicable-methods #'lock (list node))
-               (reinitialize-instance node :lock (let ((lock (lock node)))
-                                                   (ensure-gethash
-                                                    lock seen
-                                                    (let ((*print-level* 3) (*print-length* 5))
-                                                      (princ-to-string lock))))))
+             (when (compute-applicable-methods #'object (list node))
+               (reinitialize-instance node :object (let ((lock (object node)))
+                                                     (ensure-gethash
+                                                      lock seen
+                                                      (let ((*print-level* 3) (*print-length* 5))
+                                                        (princ-to-string lock))))))
              (map nil #'rec (children node))))
     (rec node)))
 

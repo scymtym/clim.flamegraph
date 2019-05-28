@@ -29,32 +29,66 @@
              (loop :with  t-a-s = (ensure-thread-aggregation-state aggregation-state thread)
                    :for   event = (maybe-consume-event thread-state)
                    :while event
-                   :do    (case (event-kind event)
-                            (:enter (process-enter-event event t-a-s))
-                            (:leave (when-let ((root (process-leave-event event t-a-s)))
-                                      (recording:add-chunk source run (list root)))))))
+                   :do    (when-let ((result (process-event event t-a-s)))
+                            (recording:add-chunk source run (list result)))))
            (recording-state-thread-states state)))
 
-(defun process-enter-event (event state)
-  (let* ((stack  (stack state))
-         (top    (let ((index (fill-pointer stack)))
-                   (when (plusp index)
-                     (aref stack (1- index)))))
-         (new    (if top
-                     (let ((region (make-instance 'model::call-region
-                                                  :name       (event-name event)
-                                                  :start-time (event-time event)
-                                                  :values     (event-data event))))
-                       (push region (model:children top))
-                       region)
-                     (make-instance 'model::root-call-region
-                                    :thread     (thread state)
-                                    :name       (event-name event)
-                                    :start-time (event-time event)
-                                    :values     (event-data event)))))
-    (vector-push-extend new stack)))
+(defmethod process-event ((event event) (state thread-aggregation-state))
+  (process-event-using-kind (event-kind event) event state))
 
-(defun process-leave-event (event state)
+;;; Ordinary calls with and without values
+
+(macrolet
+    ((define-enter-handler (kind call-class root-call-class values)
+       `(defmethod process-event-using-kind ((kind  (eql ,kind))
+                                             (event event)
+                                             (state thread-aggregation-state))
+          (let* ((stack  (stack state))
+                 (top    (let ((index (fill-pointer stack)))
+                           (when (plusp index)
+                             (aref stack (1- index)))))
+                 (new    (if top
+                             (let ((region (make-instance ',call-class
+                                                          :name       (event-name  event)
+                                                          :start-time (event-time  event)
+                                                          ,@(case values
+                                                              (:values `(:values (event-values event)))
+                                                              (:object `(:object (event-values event)))))))
+                               (push region (model:children top))
+                               region)
+                             (make-instance ',root-call-class
+                                            :thread     (thread state)
+                                            :name       (event-name event)
+                                            :start-time (event-time event)
+                                            ,@(case values
+                                                (:values `(:values (event-values event)))
+                                                (:object `(:object (event-values event))))))))
+            (vector-push-extend new stack)
+            nil))))
+
+  (define-enter-handler :enter
+    model::call-region/inner model::call-region/root nil)
+  (define-enter-handler :enter/args
+    model::call-region/inner/values model::call-region/root/values :values)
+  (define-enter-handler :enter/block
+    model::wait-region/inner model::wait-region/root :object))
+
+(defmethod process-event-using-kind ((kind  (eql :leave))
+                                     (event event)
+                                     (state thread-aggregation-state))
+  (when-let* ((stack (stack state))
+              (index (fill-pointer stack))
+              (top   (when (plusp index)
+                       (aref stack (1- index)))))
+    (when (and top (eq (model:name top) (event-name event)))
+      (setf (model:end-time top) (event-time event))
+      (vector-pop stack)
+      (when (= index 1) ; TODO could check for root-call-region or similar
+        top))))
+
+(defmethod process-event-using-kind ((kind  (eql :leave/unblock))
+                                     (event event)
+                                     (state thread-aggregation-state))
   (when-let* ((stack (stack state))
               (index (fill-pointer stack))
               (top   (when (plusp index)

@@ -6,6 +6,26 @@
 
 (cl:in-package #:clim.flamegraph.model)
 
+;;; `inner-region-mixin'
+
+(defclass inner-region/single-mixin ()
+  ((%child :initarg  :child
+           :accessor child)))
+
+(defmethod children ((node inner-region/single-mixin))
+  (list (child node)))
+
+(defmethod print-items:print-items append ((object inner-region/single-mixin))
+  `((:child-count ,1 " (~D)" ((:after :duration)))))
+
+(defclass inner-region-mixin ()       ; TODO node has children as well
+  ((%children :initarg  :children
+              :accessor children        ; TODO adjustable-vector?
+              :initform '())))
+
+(defmethod print-items:print-items append ((object inner-region-mixin))
+  `((:child-count ,(length (children object)) " (~D)" ((:after :duration)))))
+
 ;;; `root-region-mixin'
 
 (defclass root-region-mixin ()
@@ -36,31 +56,56 @@
   (let ((*package* (find-package '#:clim.flamegraph.model))) ; HACK
     (call-next-method)))
 
-;;; `inner-region'
-
-(defclass inner-region (standard-region) ; TODO node has children as well
-  ((%children :initarg  :children
-              :accessor children        ; TODO adjustable-vector?
-              :initform '())))
-
-(defmethod print-items:print-items append ((object inner-region))
-  `((:child-count ,(length (children object)) " (~D)" ((:after :duration)))))
-
 ;;; `call-region'
 
-(defclass call-region (inner-region)
+(defclass values-mixin ()
   ((%values :initarg :values
             :reader  values*)))
 
-;;; `root-call-region'
+(defclass call-region (standard-region)
+  ())
 
-(defclass root-call-region (root-region-mixin
-                            call-region)
+(defclass call-region/leaf (call-region)
+  ())
+
+(defclass call-region/leaf/values (call-region
+                                   values-mixin)
+  ())
+
+(defclass call-region/inner (call-region
+                             inner-region-mixin)
+  ())
+
+(defclass call-region/inner/values (call-region
+                                    inner-region-mixin
+                                    values-mixin)
+  ())
+
+(defclass call-region/root (call-region
+                            inner-region-mixin
+                            root-region-mixin)
+  ())
+
+(defclass call-region/root/values (call-region
+                                   inner-region-mixin
+                                   root-region-mixin
+                                   values-mixin)
   ())
 
 ;;; `wait-region'
 
-(defclass wait-region (call-region)     ; TODO should be region
-  ((%lock :initarg :lock
-          :reader  lock)
-   (%values :initform '())))
+(defclass wait-region (standard-region)
+  ((%object :initarg :object
+            :reader  object)))
+
+(defclass wait-region/leaf (wait-region)
+  ())
+
+(defclass wait-region/inner (wait-region
+                             inner-region-mixin)
+  ())
+
+(defclass wait-region/root (wait-region
+                            inner-region-mixin
+                            root-region-mixin)
+  ())

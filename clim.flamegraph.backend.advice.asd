@@ -12,5 +12,6 @@
                  :serial     t
                  :components ((:file       "package")
                               (:file       "backend")
+                              (:file       "events")
                               (:file       "conversion")
                               (:file       "source")))))

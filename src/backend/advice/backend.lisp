@@ -7,11 +7,12 @@
 (cl:in-package #:clim.flamegraph.backend.advice)
 
 (defstruct (event
-            (:constructor make-event))
+            (:constructor make-event)
+            (:copier      nil))
   (kind)
   (name)
-  (time)
-  (data))
+  (time   0 :type (unsigned-byte 62)) ; TODO type
+  (values))
 
 (defconstant +event-ring-buffer-size+ 65536)
 
@@ -19,7 +20,7 @@
   (coerce (loop :repeat +event-ring-buffer-size+ :collect (make-event))
           `(simple-array event (,+event-ring-buffer-size+))))
 
-(defstruct (thread-state
+(defstruct (thread-state ; TODO rename to something-buffer
             (:constructor make-thread-state ())
             (:copier nil)
             (:predicate nil))
@@ -97,7 +98,7 @@
 
 (defmacro with-thread-state2 ((state-var &optional thread)
                               recording-body normal-body)
-  (alexandria:with-gensyms
+  (with-gensyms
       (recording-state recording-thunk normal-thunk with-state-thunk)
     `(labels ((,recording-thunk (,state-var)
                 ,recording-body)
@@ -115,141 +116,3 @@
                   (*thread-state* ,state-var))
              (,with-state-thunk ,state-var)))
          (,normal-thunk)))))
-
-(defun call-and-record2 (name function &rest args)
-  ;; (declare (dynamic-extent args))
-  (with-thread-state2 (state) ; TODO bind special so nested calls can avoid thread lookup?
-    (progn
-      (let ((*recording-state* nil)
-            (*thread-state*    nil)) ; TODO flip flag in state?
-        (note-enter state name args))
-      (unwind-protect
-           (sb-sys:with-interrupts
-             (apply function args))
-        (let ((*recording-state* nil)
-              (*thread-state*    nil))
-          (note-leave state name))))
-    (apply function args)))
-
-;;;
-
-
-
-(defun note-enter (state name values)
-  (when-let ((event (produce-event state)))
-    (setf (event-kind event) :enter
-          (event-time event) (time:real-time)
-          (event-name event) name
-          (event-data event) (map 'list (lambda (value)
-                                          (if (sb-ext:stack-allocated-p value)
-                                              `(:stack-allocated ,(ignore-errors (princ-to-string value)))
-                                              value))
-                                  values))
-    (commit-event state)))
-
-(defun note-leave (state name)
-  (when-let ((event (produce-event state)))
-    (setf (event-kind event) :leave
-          (event-time event) (time:real-time)
-          (event-name event) name)
-    (commit-event state)))
-
-(defun call-and-record (name function &rest args)
-  (with-thread-state (state)
-    (note-enter state name args)
-    (let ((values))
-      (unwind-protect
-           (progn
-             (setf values (multiple-value-list (apply function args)))
-             (values-list values))
-        (note-leave state name)              ; values
-        ))))
-
-#+later (defun note-block (name lock)
-  (with-thread-state (state)
-    (let* ((stack (thread-state-stack state))
-           (top   (let ((index (fill-pointer stack)))
-                    (when (plusp index)
-                      (aref stack (1- index)))))
-           (new   (make-instance 'model::wait-region
-                                 :name       name
-                                 :start-time (time:real-time)
-                                 :lock       lock)))
-      (if top
-          (push new (model:children top))
-          (vector-push-extend new (thread-state-roots state)))
-      (vector-push-extend new stack))))
-
-#+later (defun call-and-record/block (name function &rest args)
-  (note-block name (first args))
-  (unwind-protect
-       (apply function args)
-    (note-leave state name)))
-
-#+later (defun note-unblock (name lock)
-  (with-thread-state (state)
-    (let* ((stack (thread-state-stack state))
-           (top   (let ((index (fill-pointer stack)))
-                    (when (plusp index)
-                      (aref stack (1- index)))))
-           (new   (make-instance 'model::wait-region
-                                 :name       name
-                                 :start-time (time:real-time)
-                                 :lock       lock)))
-      (if top
-          (push new (model:children top))
-          (vector-push-extend new (thread-state-roots state)))
-      (vector-push-extend new stack))))
-
-#+later (defun call-and-record/unblock (name function &rest args)
-  (note-unblock name (first args))
-  (unwind-protect
-       (apply function args)
-    (note-leave name)))
-
-(defun record-name (name &key (recorder (curry #'call-and-record2 name)))
-  (print name)
-  (sb-int:unencapsulate name 'recorder)
-  (sb-int:encapsulate name 'recorder recorder))
-
-(defmethod record ((thing symbol))
-  (record-name thing))
-
-(defmethod record ((thing function))
-  (let ((name (nth-value 2 (function-lambda-expression thing))))
-    (record-name name)))
-
-(defmethod record ((thing string))
-  (record (find-package thing)))
-
-(defmethod record ((thing package))
-  (do-symbols (symbol thing)
-    (when (eq (symbol-package symbol) thing)
-      (when (fboundp symbol)
-        (record-name symbol))
-      #+later (when (fdefinition `(setf ,symbol))
-                (record-name symbol)))))
-
-;;;
-
-(defun record-blockers ()
-  (dolist (name '(sb-unix::nanosleep-float sb-unix::nanosleep-double sb-unix::nanosleep))
-    (record-name name :recorder (curry #'call-and-record/block name)))
-
-  (record-name 'sb-ext:process-wait :recorder (curry #'call-and-record/block 'sb-ext:process-wait))
-  (record-name 'sb-impl::waitpid :recorder (curry #'call-and-record/block 'sb-impl::waitpid))
-  (record-name 'sb-impl::get-processes-status-changes)
-
-
-  (record-name 'sb-thread:condition-wait :recorder (curry #'call-and-record/block 'sb-thread:condition-wait))
-  (record-name 'sb-thread:join-thread :recorder (curry #'call-and-record/block 'sb-thread:join-thread))
-
-  (record-name 'sb-thread:grab-mutex :recorder (curry #'call-and-record/block 'sb-thread:grab-mutex))
-  (record-name 'sb-thread:release-mutex :recorder (curry #'call-and-record/block 'sb-thread:release-mutex)))
-
-(defun record-io ()
-  (dolist (name '(read-character read-character-no read-line read-sequence))))
-
-(defun record-notable ()
-  (dolist (name '(compile intern))
-    (record-name name)))
