@@ -9,7 +9,11 @@
    :name (error "Missing required :NAME initarg")))
 
 (defmethod print-items:print-items append ((object name-mixin))
-  `((:name ,(name object) "~A")))
+  (let* ((name (name object)) ; TODO hack
+         (name (typecase name
+                 (qualified-name (format nil "~A::~A" (container name) (name name)))
+                 (t              name))))
+   `((:name ,name "~A"))))
 
 ;;; `temporal-point-mixin'
 
