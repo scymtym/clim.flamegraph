@@ -5,7 +5,8 @@
                 "utilities.print-items"
 
                 "clim.flamegraph.model"
-                "clim.flamegraph.recording")
+                "clim.flamegraph.recording"
+                "clim.flamegraph.source")
 
   :components  ((:module     "backend-advice"
                  :pathname   "src/backend/advice"

@@ -1,3 +1,9 @@
+;;;; events.lisp --- Call-like events this source can record.
+;;;;
+;;;; Copyright (C) 2019 Jan Moringen
+;;;;
+;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
+
 (cl:in-package #:clim.flamegraph.backend.advice)
 
 (defmacro recording-event ((event-var state kind name) &body body)
@@ -27,7 +33,7 @@
 
 (defun recording-call (name function &rest args)
   (declare (dynamic-extent args))
-  (with-thread-state2 (state) ; TODO bind special so nested calls can avoid thread lookup?
+  (with-thread-state-and-nesting (state)
     (progn
       (let ((*recording-state* nil)
             (*thread-state*    nil)) ; TODO flip flag in state?
@@ -42,7 +48,7 @@
 
 (defun recording-call/args (name function &rest args)
   ;; (declare (dynamic-extent args))
-  (with-thread-state2 (state) ; TODO bind special so nested calls can avoid thread lookup?
+  (with-thread-state-and-nesting (state)
     (progn
       (let ((*recording-state* nil)
             (*thread-state*    nil))    ; TODO flip flag in state?
@@ -56,7 +62,7 @@
     (apply function args)))
 
 #+later (defun call-and-record/args+values (name function &rest args)
-  (with-thread-state (state)
+  (with-thread-state-and-nesting (state)
     (note-enter state name args)
     (let ((values))
       (unwind-protect
@@ -82,7 +88,7 @@
 
 (defun recording-call/block (name function object &rest args)
   (declare (dynamic-extent args))
-  (with-thread-state2 (state)
+  (with-thread-state-and-nesting (state)
     (progn
       (note-enter/block state name object)
       (unwind-protect
@@ -92,7 +98,7 @@
 
 (defun recording-call/unblock (name function object &rest args)
   (declare (dynamic-extent args))
-  (with-thread-state2 (state)
+  (with-thread-state-and-nesting (state)
     (progn
       (note-enter/unblock state name object)
       (unwind-protect
@@ -102,7 +108,7 @@
 
 (defun recording-call/blocking (name function object &rest args)
   (declare (dynamic-extent args))
-  (with-thread-state2 (state)
+  (with-thread-state-and-nesting (state)
     (progn
       (note-enter/block state name object)
       (unwind-protect
@@ -113,27 +119,36 @@
 ;;;
 
 (defun record-name (name &key (recorder (curry #'recording-call/args name)))
-  (print name)
   (sb-int:unencapsulate name 'recorder)
   (sb-int:encapsulate name 'recorder recorder))
 
-(defmethod record ((thing symbol))
-  (record-name thing))
+(defun unrecord-name (name)
+  (sb-int:unencapsulate name 'recorder))
 
-(defmethod record ((thing function))
-  (let ((name (nth-value 2 (function-lambda-expression thing))))
-    (record-name name)))
+(defun record (thing)
+  (map nil #'record-name (thing->names thing)))
 
-(defmethod record ((thing string))
-  (record (find-package thing)))
+(defun unrecord (thing)
+  (map nil #'unrecord-name (thing->names thing)))
 
-(defmethod record ((thing package))
-  (do-symbols (symbol thing)
-    (when (eq (symbol-package symbol) thing)
-      (when (fboundp symbol)
-        (record-name symbol))
-      #+later (when (fdefinition `(setf ,symbol))
-                (record-name symbol)))))
+(defmethod thing->names ((thing symbol))
+  (list thing))
+
+(defmethod thing->names ((thing function))
+  (list (nth-value 2 (function-lambda-expression thing))))
+
+(defmethod thing->names ((thing string))
+  (thing->names (find-package thing)))
+
+(defmethod thing->names ((thing package))
+  (let ((result '()))
+    (do-symbols (symbol thing)
+      (when (eq (symbol-package symbol) thing)
+        (when (fboundp symbol)
+          (push symbol result))
+        #+later (when (fdefinition `(setf ,symbol))
+                  (push `(setf symbol) result))))
+    result))
 
 ;;;
 

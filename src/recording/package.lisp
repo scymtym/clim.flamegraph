@@ -1,3 +1,9 @@
+;;;; package.lisp --- Package definition for the recording module.
+;;;;
+;;;; Copyright (C) 2019 Jan Moringen
+;;;;
+;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
+
 (cl:defpackage #:clim.flamegraph.recording
   (:use
    #:cl
@@ -15,7 +21,9 @@
 
   ;; Source protocol
   (:export
-   #:add-chunk)
+   #:add-chunk
+
+   #:note-source-thread)
 
   ;; Recorder protocol
   (:export

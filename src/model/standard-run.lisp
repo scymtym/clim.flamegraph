@@ -32,7 +32,8 @@
 (defun threads-in-traces (traces)
   (let ((threads (make-hash-table :test #'eq)))
     (map nil (lambda (trace)
-               (ensure-gethash (thread trace) threads t))
+               (when (compute-applicable-methods #'thread (list trace))
+                 (ensure-gethash (thread trace) threads t)))
          traces)
     (coerce (hash-table-keys threads) 'simple-vector)))
 

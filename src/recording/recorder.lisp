@@ -1,3 +1,9 @@
+;;;; recorder.lisp --- .
+;;;;
+;;;; Copyright (C) 2019 Jan Moringen
+;;;;
+;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
+
 (cl:in-package #:clim.flamegraph.recording)
 
 (defclass standard-run ()
@@ -13,6 +19,9 @@
              :type     list
              :reader   sources)
    (%thread  :accessor %thread)))
+
+(defmethod make-recorder ((kind (eql :standard)) &rest args &key)
+  (apply #'make-instance 'standard-recorder args))
 
 (defmethod make-run ((recorder standard-recorder))
   (make-instance 'standard-run))
@@ -37,6 +46,19 @@
   (bt:join-thread (%thread recorder))
   (values))
 
+;;; Source
+
+(defmethod add-chunk ((source t)
+                      (run    standard-run)
+                      (chunk  t))
+  (lparallel.queue:push-queue chunk (%queue run)))
+
+(defmethod note-source-thread ((source t)
+                               (run    standard-run)
+                               (thread t)
+                               (event  t))
+  )
+
 ;;; Recorder
 
 (defmethod work ((recorder standard-recorder) (run t))
@@ -54,10 +76,3 @@
                         (run      standard-run)
                         (item     t))
   (push item (data run)))
-
-;;; Source
-
-(defmethod add-chunk ((source t)
-                      (run    standard-run)
-                      (chunk  t))
-  (lparallel.queue:push-queue chunk (%queue run)))

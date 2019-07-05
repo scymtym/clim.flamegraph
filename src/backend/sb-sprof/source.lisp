@@ -11,14 +11,16 @@
 ;;;
 
 (defclass source ()
-  ((%sample-interval   :initarg  :sample-interval
-                       :reader   sample-interval)
-   (%trace-depth-limit :initarg  :trace-depth-limit
-                       :reader   trace-depth-limit
-                       :initform 1024)
-   ;;
-   (%run               :accessor run)
-   (%thread            :accessor thread)))
+  (;; Parameters
+   (%sample-interval     :initarg  :sample-interval
+                         :reader   sample-interval
+                         :initform 0.01)
+   (%trace-depth-limit   :initarg  :trace-depth-limit
+                         :reader   trace-depth-limit
+                         :initform 1024)
+   ;; Runtime state
+   (%run                 :accessor run)
+   (%thread              :accessor thread)))
 
 (defmethod recording:setup ((source source) (run t))
   (setf *context* (make-context :depth-limit (trace-depth-limit source)))
@@ -61,7 +63,7 @@
                  :time    (trace-buffer-time buffer)
                  :samples (when (plusp (trace-buffer-count buffer))
                             (loop :with samples = (trace-buffer-samples buffer)
-                                  :for i :downfrom (* 2 (trace-buffer-count buffer)) :to 0 :by 2
+                                  :for i :downfrom (* 2 (1- (trace-buffer-count buffer))) :to 0 :by 2
                                   :collect (make-instance 'model::standard-sample
                                                           :name (info->name (aref samples i)))))))
 
@@ -144,7 +146,7 @@
                                 (+ sb-sprof::+elements-per-trace-start+
                                    (* sb-sprof::+elements-per-sample+ (1+ i)))))
                  (return)
-              :finally (setf (trace-buffer-count buffer) frame))))))
+              :finally (setf (trace-buffer-count buffer) (1+ frame)))))))
 
 (defun sigprof-handler/cpu (signal code scp)
   (declare (ignore signal code) (optimize speed (space 0))

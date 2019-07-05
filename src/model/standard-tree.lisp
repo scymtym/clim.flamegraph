@@ -6,25 +6,34 @@
 
 (cl:in-package #:clim.flamegraph.model)
 
+(defclass hit-count-mixin ()
+  ((%hit-count :initarg  :hit-count
+               :accessor hit-count
+               :initform 0)))
+
+(defmethod print-items:print-items append ((object hit-count-mixin))
+  `((:hit-count ,(hit-count object) " ~:D hit~:P" ((:after :name)))))
+
 ;;; `standard-tree'
 
 (defclass standard-tree ()
-  ())
+  ((%root :initarg  :root
+          :reader   root)
+
+   (%names :reader names
+           :initform (make-hash-table :test #'equal))
+   (%flat :reader   flat
+          :initform (make-array 0 :adjustable t :fill-pointer 0))))
 
 ;;; `standard-node'
 
 (defclass standard-node (name-mixin
+                         hit-count-mixin
                          print-items:print-items-mixin)
   ((%children  :initarg  :children
                :reader   %children
                :initform (make-hash-table :test #'equal)) ; TODO start with list
-   (%hit-count :initarg  :hit-count
-               :reader   hit-count
-               :accessor hit-count
-               :initform 0)))
-
-(defmethod print-items:print-items append ((object standard-node))
-  `((:hit-count ,(hit-count object) " ~,D hit~:P" ((:after :name)))))
+   ))
 
 (defmethod find-child ((name t) (node standard-node))
   (gethash name (%children node)))
@@ -34,6 +43,13 @@
 
 (defmethod ensure-child ((name t) (node standard-node) (thunk function))
   (ensure-gethash name (%children node) (funcall thunk)))
+
+;;;
+
+(defclass flat-node (name-mixin
+                     hit-count-mixin
+                     print-items:print-items-mixin)
+  ())
 
 ;;;
 
@@ -48,17 +64,31 @@
     (rec tree path)))
 
 (defmethod add-trace! (tree trace)
-  (let ((node tree))
+  (let ((node (root tree)))
     (incf (hit-count node))
     (map-samples
      (lambda (sample)
-       (let* ((name  (name sample))
-              (child (ensure-child name node
-                                   (lambda ()
-                                     (make-instance 'standard-node
-                                                    :name name)))))
-         (incf (hit-count child))
-         (setf node child)))
+       (unless (labels ((rec (thing)
+                          (typecase thing
+                            (qualified-name (string= "CLIM.FLAMEGRAPH.BACKEND.ADVICE"
+                                                     (container thing)))
+                            (string         (or (search "CLIM.FLAMEGRAPH.BACKEND.ADVICE" thing)
+                                                (search "RECORDING-CALL" thing)))
+                            (cons           (some #'rec thing)))))
+                 (rec (name sample)))
+
+         (let ((flat (ensure-gethash (name sample) (names tree)
+                                     (let ((node (make-instance 'flat-node :name (name sample))))
+                                       (vector-push-extend node (flat tree))
+                                       node))))
+           (incf (hit-count flat)))
+
+         (let* ((name  (name sample))
+                (child (ensure-child name node (lambda ()
+                                                 (make-instance 'standard-node
+                                                                :name name)))))
+           (incf (hit-count child))
+           (setf node child))))
      trace)
     tree))
 
@@ -68,8 +98,12 @@
                   (add-trace! tree trace)))
               #+should-be (curry #'add-trace! tree)
               run)
+
+  (sort (flat tree) #'> :key #'hit-count)
+
   tree)
 
 (defun run->tree (run)
-  (let ((tree (make-instance 'standard-node :name "<root>")))
+  (let* ((root (make-instance 'standard-node :name "<root>"))
+         (tree (make-instance 'standard-tree :root root)))
     (add-run! tree run)))

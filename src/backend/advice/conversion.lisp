@@ -1,3 +1,9 @@
+;;;; conversion.lisp --- .
+;;;;
+;;;; Copyright (C) 2019 Jan Moringen
+;;;;
+;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
+
 (cl:in-package #:clim.flamegraph.backend.advice)
 
 (defclass thread-aggregation-state ()
@@ -39,7 +45,7 @@
 ;;; Ordinary calls with and without values
 
 (macrolet
-    ((define-enter-handler (kind call-class root-call-class values)
+    ((define-enter-handler (kind inner-call-class root-call-class values)
        `(defmethod process-event-using-kind ((kind  (eql ,kind))
                                              (event event)
                                              (state thread-aggregation-state))
@@ -47,22 +53,26 @@
                  (top    (let ((index (fill-pointer stack)))
                            (when (plusp index)
                              (aref stack (1- index)))))
+                 (name   (event-name event))
+                 (time   (event-time event))
                  (new    (if top
-                             (let ((region (make-instance ',call-class
-                                                          :name       (event-name  event)
-                                                          :start-time (event-time  event)
-                                                          ,@(case values
-                                                              (:values `(:values (event-values event)))
-                                                              (:object `(:object (event-values event)))))))
-                               (push region (model:children top))
-                               region)
-                             (make-instance ',root-call-class
-                                            :thread     (thread state)
-                                            :name       (event-name event)
-                                            :start-time (event-time event)
+                             (let ((region (make-instance
+                                            ',inner-call-class
+                                            :name       name
+                                            :start-time time
                                             ,@(case values
                                                 (:values `(:values (event-values event)))
-                                                (:object `(:object (event-values event))))))))
+                                                (:object `(:object (event-values event)))))))
+                               (push region (model:children top))
+                               region)
+                             (make-instance
+                              ',root-call-class
+                              :thread     (thread state)
+                              :name       name
+                              :start-time time
+                              ,@(case values
+                                  (:values `(:values (event-values event)))
+                                  (:object `(:object (event-values event))))))))
             (vector-push-extend new stack)
             nil))))
 
@@ -82,6 +92,8 @@
                        (aref stack (1- index)))))
     (when (and top (eq (model:name top) (event-name event)))
       (setf (model:end-time top) (event-time event))
+      #+no (when (null (model:children top))
+        (to-leaf! top))
       (vector-pop stack)
       (when (= index 1) ; TODO could check for root-call-region or similar
         top))))
@@ -95,6 +107,20 @@
                        (aref stack (1- index)))))
     (when (and top (eq (model:name top) (event-name event)))
       (setf (model:end-time top) (event-time event))
+      #+no (when (null (model:children top))
+        (to-leaf! top))
       (vector-pop stack)
       (when (= index 1) ; TODO could check for root-call-region or similar
         top))))
+
+(defmethod to-leaf! ((region model::call-region/inner)) ; TODO this is too expensive
+  (change-class region 'model::call-region/leaf))
+
+(defmethod to-leaf! ((region model::call-region/inner/values))
+  (change-class region 'model::call-region/leaf/values))
+
+(defmethod to-leaf! ((region model::call-region/root))
+  region)
+
+(defmethod to-leaf! ((region model::call-region/root/values))
+  region)

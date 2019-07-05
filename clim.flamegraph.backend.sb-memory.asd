@@ -3,7 +3,8 @@
   :depends-on  ("alexandria"
 
                 "clim.flamegraph.model"
-                "clim.flamegraph.recording")
+                "clim.flamegraph.recording"
+                "clim.flamegraph.source")
 
   :components  ((:module     "backend-sb-memory"
                  :pathname   "src/backend/sb-memory"

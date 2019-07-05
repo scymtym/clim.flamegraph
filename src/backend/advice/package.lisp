@@ -13,4 +13,5 @@
    (#:time      #:clim.flamegraph.time)
    (#:model     #:clim.flamegraph.model)
 
-   (#:recording #:clim.flamegraph.recording)))
+   (#:recording #:clim.flamegraph.recording)
+   (#:backend   #:clim.flamegraph.backend)))

@@ -5,7 +5,8 @@
                 "alexandria"
 
                 "clim.flamegraph.model"
-                "clim.flamegraph.recording")
+                "clim.flamegraph.recording"
+                "clim.flamegraph.source")
 
   :components  ((:module     "backend-sbcl"
                  :pathname   "src/backend/sb-sprof"
