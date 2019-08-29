@@ -1,6 +1,7 @@
 (defsystem "clim.flamegraph.model"
   :version     (:read-file-form "version-string.sexp")
   :depends-on  ("alexandria"
+                "let-plus"
                 "utilities.print-items")
 
   :components  ((:module     "time"
