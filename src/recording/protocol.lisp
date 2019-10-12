@@ -35,10 +35,14 @@
 ;;; Recorder protocol
 ;;;
 ;;; Extends recording lifecycle protocol
+;;;
+;;; Chunks submitted by sources are processed using `handle-chunk',
+;;; individual items in chunks are processed using `handle-item'.
+;;; Result are appended to the run.
 
-(defgeneric make-run (recorder))
+(defgeneric make-run (recorder)) ; TODO make-builder? return two values: a run and a builder?
 
-(defmethod handle-chunk (recorder run chunk))
+(defmethod handle-chunk (recorder run chunk)) ; TODO run -> builder
 
 (defmethod handle-item (recorder run item))
 

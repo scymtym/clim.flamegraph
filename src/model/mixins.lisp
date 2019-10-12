@@ -9,11 +9,8 @@
    :name (error "Missing required :NAME initarg")))
 
 (defmethod print-items:print-items append ((object name-mixin))
-  (let* ((name (name object)) ; TODO hack
-         (name (typecase name
-                 (qualified-name (format nil "~A::~A" (container name) (name name)))
-                 (t              name))))
-   `((:name ,name "~A"))))
+  (let ((name (name-string (name object) :qualified? t)))
+    `((:name ,name "~A"))))
 
 ;;; `temporal-point-mixin'
 
@@ -27,8 +24,10 @@
 
 (defclass temporal-interval-mixin ()
   ((%start-time :initarg  :start-time
+                :reader   %start-time
                 :reader   start-time)
    (%end-time   :initarg  :end-time
+                :reader   %end-time
                 :accessor end-time
                 :initform nil)))
 

@@ -19,4 +19,7 @@
     run))
 
 (defmacro with-recording ((recorder) &body body)
+  "Execute BODY with RECORDER recording into a fresh run.
+
+If the execution of BODY completes normally, the return the run."
   `(call-with-recording (lambda () ,@body) ,recorder))

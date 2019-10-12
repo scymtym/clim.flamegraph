@@ -26,7 +26,7 @@
   (setf *context* (make-context :depth-limit (trace-depth-limit source)))
   (setf (run    source) run
         (thread source) (bt:make-thread (curry #'work run source)
-                                             :name "sprof source worker"))
+                                        :name "sprof source worker"))
   ;;
   (sb-sys:enable-interrupt
    sb-unix:sigprof #'sigprof-handler/cpu :synchronous t))
@@ -97,6 +97,9 @@
        (coerce info 'string)))))
 
 ;;; Signal handler
+;;;
+;;; This code was initially based on the signal handler code in SBCL's
+;;; sb-sprof contrib but has somewhat diverged by now.
 
 (declaim (inline collect-stacktrace))
 (defun collect-stacktrace (scp depth-limit buffer)
@@ -121,10 +124,10 @@
                  ;; if the compiler should be able to deduce this
                  ;; exact same information.
                  #+no (ftype (function (sb-alien:system-area-pointer)
-                                  (values (member nil t)
-                                          sb-alien:system-area-pointer
-                                          sb-alien:system-area-pointer))
-                        sb-di::x86-call-context))
+                                       (values (member nil t)
+                                               sb-alien:system-area-pointer
+                                               sb-alien:system-area-pointer))
+                             sb-di::x86-call-context))
         ;; (setf (trace-buffer-thread buffer) thread)
         (loop :with samples = (trace-buffer-samples buffer)
               :for frame :of-type array-index :below depth-limit
@@ -141,12 +144,12 @@
                   ;; frame, there is likely something wrong. Undo
                   ;; the trace start marker and the one sample we
                   ;; already recorded.
-                 (when (zerop frame)
-                   #+todo (decf (samples-index samples)
-                                (+ sb-sprof::+elements-per-trace-start+
-                                   (* sb-sprof::+elements-per-sample+ (1+ i)))))
-                 (return)
-              :finally (setf (trace-buffer-count buffer) (1+ frame)))))))
+                  (when (zerop frame)
+                    #+todo (decf (samples-index samples)
+                                 (+ sb-sprof::+elements-per-trace-start+
+                                    (* sb-sprof::+elements-per-sample+ (1+ i)))))
+                  (return)
+              :finally (setf (trace-buffer-count buffer) frame))))))
 
 (defun sigprof-handler/cpu (signal code scp)
   (declare (ignore signal code) (optimize speed (space 0))
@@ -163,7 +166,7 @@
           (let ((depth-limit (context-depth-limit context))
                 (trace       (maybe-produce-trace context)))
             (when (not trace)
-              ;; TODO warn about trace buffer being too small
+              ;; TODO warn about trace buffer being too small, count overflows
               (return-from sigprof-handler/cpu))
             (setf (trace-buffer-thread trace) thread
                   (trace-buffer-time   trace) (time:real-time))

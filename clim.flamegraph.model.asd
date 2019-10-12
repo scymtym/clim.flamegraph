@@ -15,7 +15,8 @@
                  :components ((:file       "package")
                               (:file       "protocol")
                               (:file       "mixins")
-                              (:file       "standard-name")
+                              (:file       "standard-name") ; TODO remove "standard-" from filenames
+                              (:file       "standard-function")
                               (:file       "standard-run")
                               (:file       "standard-tree")
                               (:file       "standard-region") ; TODO maybe

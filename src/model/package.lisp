@@ -12,6 +12,10 @@
   (:shadow
    #:time)
 
+  ;; Utilities
+  (:export
+   #:name-string)
+
   ;; Name protocol
   (:export
    #:name)

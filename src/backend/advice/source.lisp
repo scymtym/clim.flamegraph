@@ -14,14 +14,14 @@
                     :type     (real (0) 1)
                     :reader   sample-rate
                     :initform 1)
-   (%depth-limit    :initarg  :depth-limit
+   (%depth-limit    :initarg  :depth-limit ; TODO rename to max-depth
                     :type     (or null positive-integer)
                     :reader   depth-limit
                     :initform nil)
-   (%duration-limit :initarg  :duration-limit
-                    :type     (or null positive-integer) ; TODO unit?
-                    :reader   duration-limit
-                    :initform nil)
+   (%min-duration   :initarg  :min-duration
+                    :type     non-negative-real ; TODO unit and type?
+                    :reader   min-duration
+                    :initform 0)
    ;; Runtime state
    (%run            :accessor run)
    (%thread         :accessor thread))
@@ -29,12 +29,13 @@
    :specification (error "missing required initarg :SPECIFICATION")))
 
 (defmethod recording:setup ((source source) (run t))
+  (format t "~A setting up~%" source)
+
   ;; Advice functions for tracing according to the specification.
   (map nil #'record (specification source))
 
   ;; Set up a recording state with the specified parameters.
-  (setf *recording-state* (make-recording-state (or (depth-limit source)    (1- (ash 1 62)))
-                                                (or (duration-limit source) (1- (ash 1 62)))))
+  (setf *recording-state* (make-recording-state (or (depth-limit source) +unlimited+)))
 
   ;; Start a worker thread and tell the recorder about it.
   (setf (run source) run)
@@ -44,14 +45,19 @@
     (recording:note-source-thread source run thread :started)))
 
 (defmethod recording:start ((source source) (run t)) ; TODO store state in the source?
+  (format t "~A start~%" source)
+
   (setf (recording-state-recording? *recording-state*) t))
 
 (defmethod recording:stop ((source source) (run t))
+  (format t "~A stop~%" source)
+
   (setf (recording-state-recording? *recording-state*) nil))
 
 (defmethod recording:teardown ((source source) (run t))
-  (setf (recording-state-recording? *recording-state*) :terminating)
+  (format t "~A tearing down~%" source)
 
+  (setf (recording-state-recording? *recording-state*) :terminating)
   (let ((thread (thread source)))
     (bt:join-thread thread)
     (recording:note-source-thread source run thread :stopped))

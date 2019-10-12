@@ -81,6 +81,7 @@
                                     values-mixin)
   ())
 
+;; TODO root without children
 (defclass call-region/root (call-region
                             inner-region-mixin
                             root-region-mixin)
@@ -105,6 +106,7 @@
                              inner-region-mixin)
   ())
 
+;; TODO root without children
 (defclass wait-region/root (wait-region
                             inner-region-mixin
                             root-region-mixin)

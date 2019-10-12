@@ -10,10 +10,12 @@
 
 (defclass standard-run (temporal-interval-mixin
                         print-items:print-items-mixin)
-  ((%traces  :reader  traces
-             :writer  (setf %traces))
-   (%threads :reader  threads
-             :writer  (setf %threads))))
+  ((%threads   :reader  threads
+               :writer  (setf %threads))
+   (%functions :reader  functions
+               :writer  (setf %functions))
+   (%traces    :reader  traces
+               :writer  (setf %traces))))
 
 (defun temporal-bounds-in-traces (traces)
   (let ((start most-positive-fixnum)
@@ -37,19 +39,52 @@
          traces)
     (coerce (hash-table-keys threads) 'simple-vector)))
 
+(defun functions-in-traces (traces)
+  (let ((functions (make-hash-table :test #'equal)))
+    (labels ((process-node (node &optional (thread (when (compute-applicable-methods #'thread (list node))
+                                                     (thread node))))
+               (when (compute-applicable-methods #'name (list node))
+                 (let* ((name     (name node))
+                        (function (ensure-gethash
+                                   name functions
+                                   (make-instance 'standard-function :name name))))
+                   (setf (slot-value node '%name) function) ; TODO HACK
+                   (when thread
+                     (pushnew thread (calling-threads function) :test #'eq))
+                   (incf (call-count function))
+                   (when (compute-applicable-methods #'duration (list node))
+                     (incf (total-run-time function) (duration node)))))
+               (map nil (rcurry #'process-node thread) (children node))))
+      (map nil #'process-node traces))
+    (coerce (hash-table-values functions) 'simple-vector))) ; TODO keeping the hash-table would be useful
+
 (defmethod shared-initialize :after ((instance   standard-run)
                                      (slot-names t)
                                      &key
                                      start-time
                                      end-time
-                                     (traces    nil traces-supplied?)
-                                     (threads   nil threads-supplied?))
+                                     (threads   nil threads-supplied?)
+                                     (functions nil functions-supplied?)
+                                     (traces    nil traces-supplied?))
   (when traces-supplied?
     (setf (%traces instance) traces))
+
+  ;; Initialize thread list either from the THREADS initarg or by
+  ;; collecting all threads in TRACES.
   (cond (threads-supplied?
          (setf (%threads instance) threads))
         (traces-supplied?
          (setf (%threads instance) (threads-in-traces traces))))
+
+  ;; Initialize functions statistics either from the FUNCTIONS initarg
+  ;; or by collecting all FUNCTIONS in TRACES.
+  (cond (functions-supplied?
+         (setf (%functions instance) functions))
+        (traces-supplied?
+         (setf (%functions instance) (functions-in-traces traces))))
+
+  ;; Initialize start and end time either from the START-TIME and
+  ;; END-TIME initargs or by computing the temporal bounds of TRACES.
   (when (and (or (not start-time) (not end-time))
              traces-supplied?)
     (multiple-value-bind (start end) (temporal-bounds-in-traces traces)

@@ -6,14 +6,6 @@
 
 (cl:in-package #:clim.flamegraph.recording)
 
-(defclass standard-run ()
-  ((%queue :reader   %queue
-           :initform (lparallel.queue:make-queue))
-   (%data  :accessor data
-           :initform '())
-   #+maybe-later (%run   :accessor run
-           :initform (make-instance 'clim.flamegraph.model::standard-run))))
-
 (defclass standard-recorder ()
   ((%sources :initarg  :sources
              :type     list
@@ -23,56 +15,59 @@
 (defmethod make-recorder ((kind (eql :standard)) &rest args &key)
   (apply #'make-instance 'standard-recorder args))
 
-(defmethod make-run ((recorder standard-recorder))
-  (make-instance 'standard-run))
+(defmethod make-run ((recorder standard-recorder)) ; TODO rename
+  (make-instance 'standard-run-builder))
 
 ;;; Lifecycle
 
-(defmethod setup ((recorder standard-recorder) (run standard-run))
+(defmethod setup ((recorder standard-recorder) (run t))
   (map nil (rcurry #'setup run) (sources recorder))
+  (values))
+
+(defmethod setup ((recorder standard-recorder) (run standard-run-builder))
+  (call-next-method)
   (setf (%thread recorder) (bt:make-thread (curry #'work recorder run)
                                            :name "recording worker"))
   (values))
 
-(defmethod start ((recorder standard-recorder) (run standard-run))
+(defmethod start ((recorder standard-recorder) (run t))
   (map nil (rcurry #'start run) (sources recorder)))
 
-(defmethod stop ((recorder standard-recorder) (run standard-run))
+(defmethod stop ((recorder standard-recorder) (run t))
   (map nil (rcurry #'stop run) (sources recorder)))
 
-(defmethod teardown ((recorder standard-recorder) (run standard-run))
+(defmethod teardown ((recorder standard-recorder) (run t))
   (map nil (rcurry #'teardown run) (sources recorder))
+  (values))
+
+(defmethod teardown ((recorder standard-recorder) (run standard-run-builder))
+  (call-next-method)
   (lparallel.queue:push-queue :end (%queue run))
   (bt:join-thread (%thread recorder))
+  ;; TODO cut data-vector to size
   (values))
 
 ;;; Source
 
-(defmethod add-chunk ((source t)
-                      (run    standard-run)
-                      (chunk  t))
-  (lparallel.queue:push-queue chunk (%queue run)))
-
 (defmethod note-source-thread ((source t)
-                               (run    standard-run)
+                               (run    t)
                                (thread t)
                                (event  t))
   )
 
-;;; Recorder
+;;; Recording
+;;;
+;;; In a dedicated thread, the `work' method pops chunks off the
+;;; recorder's queue and calls `handle-item' on each item in the
+;;; chunk. The result is appended to the run.
 
-(defmethod work ((recorder standard-recorder) (run t))
+(defmethod work ((recorder standard-recorder) (run standard-run-builder))
   (loop :with queue = (%queue run)
         :for item = (lparallel.queue:pop-queue queue)
         :until (eq item :end)
         :do (handle-chunk recorder run item)))
 
 (defmethod handle-chunk ((recorder standard-recorder)
-                         (run      standard-run)
+                         (run      t)
                          (chunk    t))
   (map nil (curry #'handle-item recorder run) chunk))
-
-(defmethod handle-item ((recorder standard-recorder)
-                        (run      standard-run)
-                        (item     t))
-  (push item (data run)))

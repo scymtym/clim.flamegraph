@@ -13,26 +13,34 @@
   (samples (make-array (* 2 depth-limit)) :type simple-vector :read-only t)
   (count   0                              :type array-index))
 
+(defconstant +trace-ring-buffer-size+ 128)
+
+(deftype trace-ring-buffer-array ()
+  `(simple-array t (,+trace-ring-buffer-size+)))
+
 (defun make-trace-ring-buffer (&key (depth-limit 1024))
-  (coerce (loop :repeat 128 :collect (make-trace-buffer :depth-limit depth-limit))
-          '(simple-array trace-buffer (128))))
+  (coerce (loop :repeat +trace-ring-buffer-size+
+                :collect (make-trace-buffer :depth-limit depth-limit))
+          `(simple-array trace-buffer (,+trace-ring-buffer-size+))))
 
 (defstruct (context
-            (:constructor make-context (&key (depth-limit 1024))))
-  (depth-limit 0                                                 :type array-index :read-only t)
-  (traces      (make-trace-ring-buffer :depth-limit depth-limit) :type (simple-array trace-buffer (128)) :read-only t)
-  (read-head   0                                                 :type array-index)
-  (write-head  0                                                 :type array-index))
+            (:constructor make-context
+                (&key (depth-limit 1024)
+                 &aux (traces (make-trace-ring-buffer :depth-limit depth-limit)))))
+  (depth-limit 0   :type array-index             :read-only t)
+  (traces      nil :type trace-ring-buffer-array :read-only t)
+  (read-head   0   :type array-index)
+  (write-head  0   :type array-index))
 
 (defun produce-trace (context)
   (let ((write-head (context-write-head context)))
-    (aref (context-traces context) (mod write-head 128)) ; TODO magic number
+    (aref (context-traces context) (mod write-head +trace-ring-buffer-size+))
     ))
 
 (defun maybe-produce-trace (context)
   (let ((read-head  (context-read-head context))
         (write-head (context-write-head context)))
-    (when (< (- write-head read-head) 4 #+no 128)
+    (when (< (- write-head read-head) 4 #+no +trace-ring-buffer-size+) ; TODO report overflow
       (produce-trace context))))
 
 (defun commit-trace (context)

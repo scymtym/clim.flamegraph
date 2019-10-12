@@ -6,6 +6,13 @@
 
 (cl:in-package #:clim.flamegraph.backend.advice)
 
+;;; Sample patterns
+;;;
+;;; A sample patterns statically indicates which subset of a sequence
+;;; of sampler executions should actually sample such that a given
+;;; frequency is asymptotically achieved with any `random' calls
+;;; during sampler execution.
+
 (deftype sample-pattern-array ()
   '(simple-array bit (1024)))
 
@@ -36,6 +43,11 @@
             (= 1 (aref (sample-pattern-array pattern) index))
           (setf (sample-pattern-index pattern) (mod (1+ index) 1024))))))
 
+;;; Limits
+
+(define-constant +unlimited+
+    (1- (ash 1 62)))
+
 ;;;;
 
 (defstruct (event
@@ -48,37 +60,42 @@
 
 (defconstant +event-ring-buffer-size+ 65536)
 
+(deftype ring-buffer-array () ; TODO event-ring-buffer-array
+  `(simple-array t (,+event-ring-buffer-size+)))
+
 (defun make-event-ring-buffer ()
   (coerce (loop :repeat +event-ring-buffer-size+ :collect (make-event))
           `(simple-array event (,+event-ring-buffer-size+))))
 
 (defstruct (thread-state ; TODO rename to something-buffer
             (:constructor make-thread-state
-                (depth-limit duration-limit sample-rate
-                 &aux (sample-pattern (when sample-rate
+                (depth-limit #+no duration-limit sample-rate
+                 &aux (sample-pattern (when (and sample-rate (/= sample-rate 1))
                                         (make-sample-pattern sample-rate 1024)))))
             (:copier nil)
             (:predicate nil))
   ;; Parameters
   (depth-limit    0                        :type (unsigned-byte 62))
-  (duration-limit 0                        :type (unsigned-byte 62)) ; TODO time type
+  ; (duration-limit 0                        :type (unsigned-byte 62)) ; TODO time type
   (sample-pattern nil                      :type (or null sample-pattern))
+  (count-limit    1000000                  :type (unsigned-byte 62))
   ;; Runtime state
   (recording?     t                        :type boolean)
   (depth          0                        :type (unsigned-byte 62))
   ;; Ring buffer
-  (events         (make-event-ring-buffer) :type (simple-array t (#.+event-ring-buffer-size+)) :read-only t)
+  (events         (make-event-ring-buffer) :type ring-buffer-array :read-only t)
   (read-head      0                        :type array-index)
   (write-head     0                        :type array-index))
 
 (defun produce-event (thread-state)
   (let ((write-head (thread-state-write-head thread-state)))
-    (aref (thread-state-events thread-state) (mod write-head +event-ring-buffer-size+)) ; TODO magic number
-    ))
+    (aref (thread-state-events thread-state)
+          (mod write-head +event-ring-buffer-size+))))
 
 (defun maybe-produce-event (thread-state)
   (let ((read-head  (thread-state-read-head thread-state))
         (write-head (thread-state-write-head thread-state)))
+    ; TODO count overruns
     (when (< (- write-head read-head) +event-ring-buffer-size+)
       (produce-event thread-state))))
 
@@ -88,7 +105,8 @@
 (defun consume-event (thread-state)
   (let ((read-head (thread-state-read-head thread-state)))
     (prog1
-        (aref (thread-state-events thread-state) (mod read-head +event-ring-buffer-size+))
+        (aref (thread-state-events thread-state)
+              (mod read-head +event-ring-buffer-size+))
       (setf (thread-state-read-head thread-state) (1+ read-head)))))
 
 (defun maybe-consume-event (thread-state)
@@ -98,10 +116,9 @@
       (consume-event thread-state))))
 
 (defstruct (recording-state
-            (:constructor make-recording-state (depth-limit duration-limit)))
+            (:constructor make-recording-state (depth-limit)))
   ;; Parameters
   (depth-limit    0                                            :type (unsigned-byte 62))
-  (duration-limit 0                                            :type (unsigned-byte 62)) ; TODO time type
   (sample-rate    1                                            :type (real (0) 1))
   ;; Runtime state
   (recording?     nil                                          :type (or (eql :terminating) boolean))
@@ -110,11 +127,12 @@
 (declaim (inline ensure-thread-state))
 (defun ensure-thread-state (recording-state
                             &optional (thread (bt:current-thread)))
+
   (let ((table (recording-state-thread-states recording-state)))
     (ensure-gethash thread table
                     (make-thread-state
                      (recording-state-depth-limit recording-state)
-                     (recording-state-duration-limit recording-state)
+                                        ; (recording-state-duration-limit recording-state)
                      (recording-state-sample-rate recording-state)))))
 
 ;;; Macros
@@ -126,7 +144,7 @@
 (defmacro with-recording-state ((state-var) recording-body normal-body)
   `(let ((,state-var *recording-state*))
      (if (and ,state-var
-              (recording-state-recording? ,state-var)
+              (eq (recording-state-recording? ,state-var) t)
               (not recording:*in-critical-recording-code?*))
          (#+sbcl sb-sys:without-interrupts #-sbcl progn
           (#+sbcl sb-sys:allow-with-interrupts #-sbcl progn
@@ -136,17 +154,25 @@
 (defmacro with-thread-state ((state-var &optional thread)
                              recording-body normal-body)
   (with-gensyms
-      (recording-state recording-thunk normal-thunk with-state-thunk)
+      (recording-state recording-thunk normal-thunk with-state-thunk count-var)
     `(labels ((,recording-thunk (,state-var)
                 ,recording-body)
               (,normal-thunk ()
-                ,normal-body)
+                (let ((*in* nil))
+                  ,normal-body))
               (,with-state-thunk (,state-var)
                 (if (and (thread-state-recording? ,state-var)
                          (< (thread-state-depth ,state-var)
                             (thread-state-depth-limit ,state-var))
                          (sample? (thread-state-sample-pattern ,state-var)))
-                    (,recording-thunk ,state-var)
+                    (let ((,count-var (thread-state-count-limit ,state-var))) ; TODO the body may produce two events
+                      (cond ((plusp ,count-var)
+                             (when (zerop (mod ,count-var 100))
+                               (print (list ,count-var (bt:current-thread)) *trace-output*))
+                             (setf (thread-state-count-limit ,state-var) (1- ,count-var))
+                             (,recording-thunk ,state-var))
+                            (t
+                             (,normal-thunk))))
                     (,normal-thunk))))
        ; (declare (inline ,recording-thunk ,normal-thunk ,with-state-thunk))
        (with-recording-state (,recording-state)
@@ -155,16 +181,31 @@
            (let* ((,state-var     (ensure-thread-state
                                    ,recording-state ,@(when thread `(,thread))))
                   (*thread-state* ,state-var))
-             (,with-state-thunk ,state-var)))
+             (if ,state-var
+                 (,with-state-thunk ,state-var)
+                 (,normal-thunk))
+             #+no (,with-state-thunk ,state-var)))
          (,normal-thunk)))))
+
+(defvar *in* nil)
+(defvar *context* nil)
+(defvar *dropped-count* (cons 0 nil))
 
 (defmacro with-thread-state-and-nesting ((state-var &optional thread)
                                          recording-body normal-body)
   (with-gensyms (old-depth)
-   `(with-thread-state (,state-var ,thread)
-      (let ((,old-depth (thread-state-depth ,state-var)))
-        (setf (thread-state-depth ,state-var) (1+ ,old-depth))
-        (multiple-value-prog1
-            ,recording-body
-          (setf (thread-state-depth ,state-var) ,old-depth)))
-      ,normal-body)))
+    `(if *in*
+         (progn
+           ; (format t "recursive ~A~%" *context*)
+           (sb-ext:atomic-incf (car *dropped-count*))
+           (let ((*in* nil))
+             ,normal-body))
+         (let ((*in* t))
+           (with-thread-state (,state-var ,thread)
+             (let ((,old-depth (thread-state-depth ,state-var)))
+               (setf (thread-state-depth ,state-var) (1+ ,old-depth))
+               ; (format t "depth ~A ~A~%" *context* (1+ ,old-depth))
+               (multiple-value-prog1
+                   ,recording-body
+                 (setf (thread-state-depth ,state-var) ,old-depth))) ; TODO what about non-local exits?
+             ,normal-body)))))

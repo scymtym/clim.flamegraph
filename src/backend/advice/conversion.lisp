@@ -6,29 +6,32 @@
 
 (cl:in-package #:clim.flamegraph.backend.advice)
 
-(defclass thread-aggregation-state ()
-  ((%thread :initarg  :thread
-            :reader   thread)
-   (%stack  :reader   stack
-            :initform (make-array 0 :adjustable t :fill-pointer 0))))
-
 (defclass aggregation-state ()
-  ((%thread-states :reader   thread-states
+  (;; Parameters
+   (%min-duration  :initarg  :min-duration
+                   :reader   min-duration
+                   :initform 0)
+   ;; State
+   (%thread-states :reader   thread-states
                    :initform (make-hash-table :test #'eq))))
 
 (defun ensure-thread-aggregation-state (aggregation-state thread)
   (ensure-gethash thread (thread-states aggregation-state)
-                  (make-instance 'thread-aggregation-state :thread thread)))
+                  (make-instance 'thread-aggregation-state
+                                 :thread       thread
+                                 :min-duration (min-duration aggregation-state))))
 
 (defun work (run source)
-  (loop :with aggregation-state = (make-instance 'aggregation-state)
+  (loop :with aggregation-state = (make-instance 'aggregation-state
+                                                 :min-duration (floor (min-duration source)
+                                                                      1/1000000))
         :for  state             = *recording-state*
         :when state
         :do   (process-state run source state aggregation-state)
               (when (eq (recording-state-recording? state) :terminating)
                 (process-state run source state aggregation-state)
                 (return))
-              (sleep .01)))
+              (sleep .01))) ; TODO
 
 (defun process-state (run source state aggregation-state)
   (maphash (lambda (thread thread-state)
@@ -39,40 +42,58 @@
                             (recording:add-chunk source run (list result)))))
            (recording-state-thread-states state)))
 
+;;; Ordinary calls with and without values (nested within one thread)
+;;;
+;;; The `thread-aggregation-state' keeps a stack of "enter" events for
+;;; which the corresponding "leave" event has not been encountered
+;;; yet. Each time a "leave" event is encountered, the top "enter"
+;;; event is popped off the stack and a region is made based on the
+;;; two events.
+
+(defclass thread-aggregation-state ()
+  (;; Parameters
+   (%thread       :initarg  :thread
+                  :reader   thread)
+   (%min-duration :initarg  :min-duration
+                  :type     non-negative-integer ; TODO time type
+                  :reader   min-duration
+                  :initform 0)
+   ;; State
+   (%stack        :reader   stack
+                  :initform (make-array 0 :adjustable t :fill-pointer 0))))
+
 (defmethod process-event ((event event) (state thread-aggregation-state))
   (process-event-using-kind (event-kind event) event state))
-
-;;; Ordinary calls with and without values
 
 (macrolet
     ((define-enter-handler (kind inner-call-class root-call-class values)
        `(defmethod process-event-using-kind ((kind  (eql ,kind))
                                              (event event)
                                              (state thread-aggregation-state))
-          (let* ((stack  (stack state))
-                 (top    (let ((index (fill-pointer stack)))
-                           (when (plusp index)
-                             (aref stack (1- index)))))
-                 (name   (event-name event))
-                 (time   (event-time event))
-                 (new    (if top
-                             (let ((region (make-instance
-                                            ',inner-call-class
-                                            :name       name
-                                            :start-time time
-                                            ,@(case values
-                                                (:values `(:values (event-values event)))
-                                                (:object `(:object (event-values event)))))))
-                               (push region (model:children top))
-                               region)
-                             (make-instance
-                              ',root-call-class
-                              :thread     (thread state)
-                              :name       name
-                              :start-time time
-                              ,@(case values
-                                  (:values `(:values (event-values event)))
-                                  (:object `(:object (event-values event))))))))
+          (let* ((stack (stack state))
+                 (top   (let ((index (fill-pointer stack)))
+                          (when (plusp index)
+                            (aref stack (1- index)))))
+                 (name  (event-name event))
+                 (time  (event-time event))
+                 (new   (if top
+                            (let ((region (make-instance
+                                           ',inner-call-class
+                                           :name       name
+                                           :start-time time
+                                           ,@(case values
+                                               (:values `(:values (event-values event)))
+                                               (:object `(:object (first (event-values event))))))))
+                              (push region (model:children top))
+                              region)
+                            (make-instance
+                             ',root-call-class
+                             :thread     (thread state)
+                             :name       name
+                             :start-time time
+                             ,@(case values
+                                 (:values `(:values (event-values event)))
+                                 (:object `(:object (first (event-values event)))))))))
             (vector-push-extend new stack)
             nil))))
 
@@ -83,35 +104,39 @@
   (define-enter-handler :enter/block
     model::wait-region/inner model::wait-region/root :object))
 
-(defmethod process-event-using-kind ((kind  (eql :leave))
-                                     (event event)
-                                     (state thread-aggregation-state))
-  (when-let* ((stack (stack state))
-              (index (fill-pointer stack))
-              (top   (when (plusp index)
-                       (aref stack (1- index)))))
-    (when (and top (eq (model:name top) (event-name event)))
-      (setf (model:end-time top) (event-time event))
-      #+no (when (null (model:children top))
-        (to-leaf! top))
-      (vector-pop stack)
-      (when (= index 1) ; TODO could check for root-call-region or similar
-        top))))
+(flet ((process-leave-event (event state)
+         (when-let* ((stack (stack state))
+                     (index (fill-pointer stack))
+                     (top   (if (plusp index)
+                                (aref stack (1- index))
+                                (progn
+                                  (warn "Dropping ~A event since there is no corresponding enter event on the stack" event)
+                                  nil))))
+           (when (and top (eq (model:name top) (event-name event)))
+             (vector-pop stack)
+             (let ((min-duration (min-duration state))
+                   (end-time     (event-time event)))
+               (cond ((>= (- end-time (model::%start-time top)) min-duration)
+                      (setf (model:end-time top) end-time)
+                      #+no (when (null (model:children top))
+                             (to-leaf! top))
+                      (when (= index 1) ; TODO could check for root-call-region or similar
+                        top))
+                     (t
+                      (unless (= index 1)
+                        (pop (model:children (aref stack (- index 2)))))
+                      nil)))))))
+  (declare (inline process-leave-event))
 
-(defmethod process-event-using-kind ((kind  (eql :leave/unblock))
-                                     (event event)
-                                     (state thread-aggregation-state))
-  (when-let* ((stack (stack state))
-              (index (fill-pointer stack))
-              (top   (when (plusp index)
-                       (aref stack (1- index)))))
-    (when (and top (eq (model:name top) (event-name event)))
-      (setf (model:end-time top) (event-time event))
-      #+no (when (null (model:children top))
-        (to-leaf! top))
-      (vector-pop stack)
-      (when (= index 1) ; TODO could check for root-call-region or similar
-        top))))
+  (defmethod process-event-using-kind ((kind  (eql :leave))
+                                       (event event)
+                                       (state thread-aggregation-state))
+    (process-leave-event event state))
+
+  (defmethod process-event-using-kind ((kind  (eql :leave/unblock))
+                                       (event event)
+                                       (state thread-aggregation-state))
+    (process-leave-event event state)))
 
 (defmethod to-leaf! ((region model::call-region/inner)) ; TODO this is too expensive
   (change-class region 'model::call-region/leaf))

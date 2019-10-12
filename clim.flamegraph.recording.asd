@@ -10,5 +10,6 @@
                  :serial     t
                  :components ((:file       "package")
                               (:file       "protocol")
+                              (:file       "run-builder")
                               (:file       "recorder")
                               (:file       "macros")))))
