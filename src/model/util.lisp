@@ -1,3 +1,9 @@
+;;;; util.lisp --- Utilities provided by the model module.
+;;;;
+;;;; Copyright (C) 2019, 2020 Jan Moringen
+;;;;
+;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
+
 (cl:in-package #:clim.flamegraph.model)
 
 (defmethod name-string ((name null) &key qualified?)
@@ -9,11 +15,6 @@
       (let ((*package* (find-package :keyword)))
         (prin1-to-string name))
       (symbol-name name)))
-
-(defmethod name-string ((name qualified-name) &key qualified?)
-  (if qualified?
-      (format nil "~A::~A" (container name) (name name))
-      (name name)))
 
 (defmethod name-string ((name t) &key qualified?)
   (declare (ignore qualified?))

@@ -1,3 +1,9 @@
+;;;; mixins.lisp --- Mixin classes provided by the model module.
+;;;;
+;;;; Copyright (C) 2019, 2020 Jan Moringen
+;;;;
+;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
+
 (cl:in-package #:clim.flamegraph.model)
 
 ;;; `name-mixin'
