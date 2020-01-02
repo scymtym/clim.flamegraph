@@ -8,31 +8,44 @@
 
 (defvar *context*)
 
+;;; `source'
 ;;;
+;;; This source produce traces by asynchronously interrupting threads
+;;; and sampling the respective call stacks. A background thread
+;;; converts raw trace buffers to properly represented traces.
 
 (defclass source ()
   (;; Parameters
-   (%sample-interval     :initarg  :sample-interval
-                         :reader   sample-interval
-                         :initform 0.01)
-   (%trace-depth-limit   :initarg  :trace-depth-limit
-                         :reader   trace-depth-limit
-                         :initform 1024)
+   (%sample-interval   :initarg  :sample-interval
+                       :reader   sample-interval
+                       :initform 0.01
+                       :documentation
+                       "Time in seconds between samples.")
+   (%trace-depth-limit :initarg  :trace-depth-limit
+                       :reader   trace-depth-limit
+                       :initform 1024
+                       :documentation
+                       "Maximum recording call stack depth. Stack
+                        frames beyond the limit will not be present in
+                        the recorded trace.")
    ;; Runtime state
-   (%run                 :accessor run)
-   (%thread              :accessor thread)))
+   (%run               :accessor run)
+   (%thread            :accessor thread)))
 
 (defmethod recording:setup ((source source) (run t))
   (setf *context* (make-context :depth-limit (trace-depth-limit source)))
   (setf (run    source) run
         (thread source) (bt:make-thread (curry #'work run source)
                                         :name "sprof source worker"))
-  ;;
+  ;; Install a signal handler that will be invoked periodically via a
+  ;; timer and the "profile" signal.
   (sb-sys:enable-interrupt
    sb-unix:sigprof #'sigprof-handler/cpu :synchronous t))
 
 (defmethod recording:start ((source source) (run t))
-  (multiple-value-bind (secs usecs) ; TODO separate function
+  ;; Configure a system timer to trigger our handler according to the
+  ;; requested sample interval.
+  (multiple-value-bind (secs usecs)     ; TODO separate function
       (multiple-value-bind (secs rest)
           (truncate (sample-interval source))
         (values secs (truncate (* rest 1000000))))
@@ -48,9 +61,13 @@
   (bt:join-thread (thread source)))
 
 ;;; Worker
+;;;
+;;; The `work' function is executed by a background thread to
+;;; asynchronously pop trace buffers off the context and convert them
+;;; to the proper trace representation.
 
 (defun work (run source)
-  (loop :for context = *context* ; TODO termination
+  (loop :for context = *context*        ; TODO termination
         :while context
         :for trace-buffer = (maybe-consume-trace context)
         :when trace-buffer
@@ -163,13 +180,16 @@
                (not recording:*in-critical-recording-code?*))
       (let ((recording:*in-critical-recording-code?* t))
         (sb-thread::with-system-mutex (sb-sprof::*profiler-lock* :without-gcing t) ; TODO is the lock needed? is without-gcing needed?
-          (let ((depth-limit (context-depth-limit context))
-                (trace       (maybe-produce-trace context)))
-            (when (not trace)
-              ;; TODO warn about trace buffer being too small, count overflows
-              (return-from sigprof-handler/cpu))
-            (setf (trace-buffer-thread trace) thread
-                  (trace-buffer-time   trace) (time:real-time))
-            (collect-stacktrace scp depth-limit trace)
-            (commit-trace context))))))
+          ;; Bind `*print-circle*' to avoid touching the circularity
+          ;; hash-table when (re-)entering the pretty printer.
+          (let ((*print-circle* nil))
+            (let ((depth-limit (context-depth-limit context))
+                  (trace       (maybe-produce-trace context)))
+              (when (not trace)
+                ;; TODO warn about trace buffer being too small, count overflows
+                (return-from sigprof-handler/cpu))
+              (setf (trace-buffer-thread trace) thread
+                    (trace-buffer-time   trace) (time:real-time))
+              (collect-stacktrace scp depth-limit trace)
+              (commit-trace context)))))))
   nil)

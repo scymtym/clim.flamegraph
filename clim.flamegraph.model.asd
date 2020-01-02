@@ -14,6 +14,7 @@
                  :serial     t
                  :components ((:file       "package")
                               (:file       "protocol")
+                              (:file       "util")
                               (:file       "mixins")
                               (:file       "standard-name") ; TODO remove "standard-" from filenames
                               (:file       "standard-function")
