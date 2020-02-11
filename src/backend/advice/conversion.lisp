@@ -1,6 +1,6 @@
-;;;; conversion.lisp --- .
+;;;; conversion.lisp --- Converting call events to regions.
 ;;;;
-;;;; Copyright (C) 2019 Jan Moringen
+;;;; Copyright (C) 2019, 2020 Jan Moringen
 ;;;;
 ;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
 
