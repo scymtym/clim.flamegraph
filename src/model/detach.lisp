@@ -47,12 +47,10 @@
     (standard-event  (detach-event! trace seen))))
 
 (defun detach-thread (thread seen)
-  (let ((name (typecase thread
-                (sb-thread:thread (sb-thread:thread-name thread))
-                (t                thread)))
-        (key  (typecase thread
-                (sb-thread:thread thread)
-                (t                thread))))
+  (let ((name (if (bt:threadp thread)
+                (bt:thread-name thread)
+                thread))
+        (key  thread))
     (ensure-gethash key seen (make-instance 'standard-thread :name name))))
 
 (defun detach-run! (run)
