@@ -1,6 +1,6 @@
 ;;;; buffer.lisp --- Ringbuffer for traces used by the backend.sb-sprof module.
 ;;;;
-;;;; Copyright (C) 2019 Jan Moringen
+;;;; Copyright (C) 2019, 2020 Jan Moringen
 ;;;;
 ;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
 
@@ -49,7 +49,7 @@
 (defun consume-trace (context)
   (let ((read-head (context-read-head context)))
     (prog1
-        (aref (context-traces context) (mod read-head 128))
+        (aref (context-traces context) (mod read-head +trace-ring-buffer-size+))
       (setf (context-read-head context) (1+ read-head)))))
 
 (defun maybe-consume-trace (context)
