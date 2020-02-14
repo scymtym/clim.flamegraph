@@ -1,12 +1,14 @@
 ;;;; standard-tree.lisp --- Default implementations of the tree and node protocols
 ;;;;
-;;;; Copyright (C) 2019 Jan Moringen
+;;;; Copyright (C) 2019, 2020 Jan Moringen
 ;;;;
 ;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
 
 (cl:in-package #:clim.flamegraph.model)
 
-(defclass hit-count-mixin ()
+;;; `hit-count-mixin'
+
+(defclass hit-count-mixin () ; TODO should this be in a different file?
   ((%hit-count :initarg  :hit-count
                :accessor hit-count
                :initform 0)))
@@ -30,9 +32,9 @@
 (defclass standard-node (name-mixin
                          hit-count-mixin
                          print-items:print-items-mixin)
-  ((%children  :initarg  :children
-               :reader   %children
-               :initform (make-hash-table :test #'equal)) ; TODO start with list
+  ((%children :initarg  :children
+              :reader   %children
+              :initform (make-hash-table :test #'equal)) ; TODO start with an alist
    ))
 
 (defmethod find-child ((name t) (node standard-node))
@@ -69,12 +71,15 @@
     (map-samples
      (lambda (sample)
        (unless (labels ((rec (thing)
-                          (typecase thing
-                            (qualified-name (string= "CLIM.FLAMEGRAPH.BACKEND.ADVICE"
-                                                     (container thing)))
-                            (string         (or (search "CLIM.FLAMEGRAPH.BACKEND.ADVICE" thing)
-                                                (search "RECORDING-CALL" thing)))
-                            (cons           (some #'rec thing)))))
+                          (typecase thing ; TODO filter those during recording?
+                            (standard-function (rec (name thing)))
+                            (qualified-name    (or (string= "CLIM.FLAMEGRAPH.BACKEND.ADVICE"
+                                                            (container thing))
+                                                   (rec (name thing))))
+                            (string            (or (search "CLIM.FLAMEGRAPH.BACKEND.ADVICE" thing)
+                                                   (search "RECORDING-CALL" thing)))
+                            (symbol            (rec (symbol-name thing)))
+                            (cons              (some #'rec thing)))))
                  (rec (name sample)))
 
          (let ((flat (ensure-gethash (name sample) (names tree)

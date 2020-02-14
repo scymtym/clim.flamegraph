@@ -1,6 +1,6 @@
 ;;;; events.lisp --- Call-like events this source can record.
 ;;;;
-;;;; Copyright (C) 2019 Jan Moringen
+;;;; Copyright (C) 2019, 2020 Jan Moringen
 ;;;;
 ;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
 
@@ -200,7 +200,7 @@
 
 (defmethod record ((thing (eql :blockers)))
   (loop :for (name . recorder) :in *blockers*
-        :do (record-name name :recorder (curry (fdefinition recorder) name))))
+        :do (record-name name :recorder (curry (fdefinition recorder) name)))) ; TODO symbol-function?
 
 (defmethod unrecord ((thing (eql :blockers)))
   (map 'nil (compose #'unrecord-name #'car) *blockers*))
