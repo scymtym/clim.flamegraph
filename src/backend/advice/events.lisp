@@ -220,6 +220,14 @@
 
   #+no (dolist (name '(read-character read-character-no read-line read-sequence))))
 
+(defmethod record ((thing (eql :io)))
+  (record-io))
+
+(defmethod unrecord ((thing (eql :io)))
+  (warn "TODO"))
+
+;;;
+
 (defun record-notable ()
   (dolist (name '(compile intern))
     (record-name name)))
