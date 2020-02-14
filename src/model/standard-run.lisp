@@ -1,6 +1,6 @@
 ;;;; standard-run.lisp --- Default implementations of run, trace, etc. protocols
 ;;;;
-;;;; Copyright (C) 2019 Jan Moringen
+;;;; Copyright (C) 2019, 2020 Jan Moringen
 ;;;;
 ;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
 
@@ -39,23 +39,18 @@
          traces)
     (coerce (hash-table-keys threads) 'simple-vector)))
 
+(defmethod register-function ((node name-mixin) (functions hash-table))
+  (let* ((name     (if (typep (name node) 'standard-function)
+                       (name (name node))
+                       (name node)))
+         (function (ensure-gethash name functions
+                                   (make-instance 'standard-function :name name))))
+    (setf (slot-value node '%name) function) ; TODO HACK
+    function))
+
 (defun functions-in-traces (traces)
   (let ((functions (make-hash-table :test #'equal)))
-    (labels ((process-node (node &optional (thread (when (compute-applicable-methods #'thread (list node))
-                                                     (thread node))))
-               (when (compute-applicable-methods #'name (list node))
-                 (let* ((name     (name node))
-                        (function (ensure-gethash
-                                   name functions
-                                   (make-instance 'standard-function :name name))))
-                   (setf (slot-value node '%name) function) ; TODO HACK
-                   (when thread
-                     (pushnew thread (calling-threads function) :test #'eq))
-                   (incf (call-count function))
-                   (when (compute-applicable-methods #'duration (list node))
-                     (incf (total-run-time function) (duration node)))))
-               (map nil (rcurry #'process-node thread) (children node))))
-      (map nil #'process-node traces))
+    (map nil (rcurry #'register-functions functions) traces)
     (coerce (hash-table-values functions) 'simple-vector))) ; TODO keeping the hash-table would be useful
 
 (defmethod shared-initialize :after ((instance   standard-run)
@@ -76,7 +71,7 @@
         (traces-supplied?
          (setf (%threads instance) (threads-in-traces traces))))
 
-  ;; Initialize functions statistics either from the FUNCTIONS initarg
+  ;; Initialize function statistics either from the FUNCTIONS initarg
   ;; or by collecting all FUNCTIONS in TRACES.
   (cond (functions-supplied?
          (setf (%functions instance) functions))
@@ -117,6 +112,14 @@
 
 (defmethod print-items:print-items append ((object standard-trace))
   `((:sample-count ,(length (samples object)) "~:D sample~:P")))
+
+(defmethod register-functions ((node standard-trace) (functions hash-table))
+  (let ((thread (thread node)))
+    (map-samples (lambda (sample)
+                   (let ((function (register-function sample functions)))
+                     (pushnew thread (calling-threads function) :test #'eq)
+                     (incf (hit-count function))))
+                 node)))
 
 ;;; `standard-thread'
 

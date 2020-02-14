@@ -28,8 +28,10 @@
                      :accessor total-run-time
                      :initform 0)
    ;; Profiler hits
-   ; (%hit-count)
-   ))
+   (%hit-count       :initarg  :hit-count
+                     :type     non-negative-integer
+                     :accessor hit-count
+                     :initform 0)))
 
 (defmethod name-string ((name standard-function) &key qualified?) ; TODO hack
   (name-string (name name) :qualified? qualified?))

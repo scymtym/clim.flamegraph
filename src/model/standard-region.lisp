@@ -1,6 +1,6 @@
 ;;;; standard-region.lisp ---
 ;;;;
-;;;; Copyright (C) 2019 Jan Moringen
+;;;; Copyright (C) 2019, 2020 Jan Moringen
 ;;;;
 ;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
 
@@ -32,6 +32,16 @@
   ((%thread :initarg :thread
             :reader  thread)))
 
+;; TODO the function should be take a function instead of a hash-table, maybe?
+(defmethod register-functions ((node root-region-mixin) (functions hash-table))
+  (let ((thread (thread node)))
+    (labels ((rec (node)
+               (let ((function (register-function node functions)))
+                 (pushnew thread (calling-threads function) :test #'eq)
+                 (incf (call-count function))
+                 (incf (total-run-time function) (duration node)))
+               (map nil #'rec (children node))))
+      (rec node))))
 
 ;;; `standard-region'
 
