@@ -1,0 +1,4 @@
+* Introduction
+
+  This source implementation consumes data collected by Mezzano's
+  built-in statistical profiler.
