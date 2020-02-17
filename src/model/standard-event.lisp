@@ -1,3 +1,9 @@
+;;;; standard-event.lisp --- Representation of events.
+;;;;
+;;;; Copyright (C) 2019, 2020 Jan Moringen
+;;;;
+;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
+
 (cl:in-package #:clim.flamegraph.model)
 
 (defclass standard-event (name-mixin
