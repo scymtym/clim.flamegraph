@@ -4,7 +4,7 @@
 
                 "clim.flamegraph.model"
                 "clim.flamegraph.recording"
-                "clim.flamegraph.source")
+                "clim.flamegraph.backend")
 
   :components  ((:module     "backend-sb-memory"
                  :pathname   "src/backend/sb-memory"

@@ -6,7 +6,7 @@
 
                 "clim.flamegraph.model"
                 "clim.flamegraph.recording"
-                "clim.flamegraph.source")
+                "clim.flamegraph.backend")
 
   :components  ((:module     "backend-sbcl"
                  :pathname   "src/backend/sb-sprof"
