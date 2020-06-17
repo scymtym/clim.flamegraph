@@ -1,6 +1,6 @@
 ;;;; backend.lisp ---
 ;;;;
-;;;; Copyright (C) 2019 Jan Moringen
+;;;; Copyright (C) 2019, 2020 Jan Moringen
 ;;;;
 ;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.DE>
 
@@ -10,7 +10,7 @@
 ;;;
 ;;; A sample patterns statically indicates which subset of a sequence
 ;;; of sampler executions should actually sample such that a given
-;;; frequency is asymptotically achieved with any `random' calls
+;;; frequency is asymptotically achieved without any `random' calls
 ;;; during sampler execution.
 
 (deftype sample-pattern-array ()
@@ -167,7 +167,7 @@
                          (sample? (thread-state-sample-pattern ,state-var)))
                     (let ((,count-var (thread-state-count-limit ,state-var))) ; TODO the body may produce two events
                       (cond ((plusp ,count-var)
-                             (when (zerop (mod ,count-var 100))
+                             #+no (when (zerop (mod ,count-var 100))
                                (print (list ,count-var (bt:current-thread)) *trace-output*))
                              (setf (thread-state-count-limit ,state-var) (1- ,count-var))
                              (,recording-thunk ,state-var))

@@ -145,8 +145,16 @@
     (return-from unrecord-name))
   (sb-int:unencapsulate name 'recorder))
 
-(defmethod record ((thing t))
-  (map nil #'record-name (thing->names thing)))
+(defmethod record ((thing t)
+                   &key (arguments? nil)
+                        (recorder   (let ((recorder (if arguments?
+                                                        #'recording-call/args
+                                                        #'recording-call)))
+                                      (lambda (name)
+                                        (curry recorder name)))))
+  (map nil (lambda (name)
+             (record-name name :recorder (funcall recorder name)))
+       (thing->names thing)))
 
 (defmethod unrecord ((thing t))
   (map nil #'unrecord-name (thing->names thing)))
@@ -166,7 +174,9 @@
                  (remove prefix (list-all-packages)
                          :test-not #'starts-with-subseq
                          :key      #'package-name)))
-      (thing->names (find-package thing))))
+      (if-let ((package (find-package thing)))
+        (thing->names package)
+        '())))
 
 (defmethod thing->names ((thing package))
   (let ((result '()))
@@ -198,7 +208,8 @@
     ; (sb-thread:release-mutex               . recording-call/unblock)
     ))
 
-(defmethod record ((thing (eql :blockers)))
+(defmethod record ((thing (eql :blockers)) &key recorder)
+  (declare (ignore recorder))
   (loop :for (name . recorder) :in *blockers*
         :do (record-name name :recorder (curry (fdefinition recorder) name)))) ; TODO symbol-function?
 
@@ -211,7 +222,7 @@
   (record-name 'directory :recorder (curry #'recording-call/blocking 'directory))
   (record-name 'open :recorder (curry #'recording-call/blocking 'open))
   (record-name 'close :recorder (curry #'recording-call/blocking 'close))
-
+  (record-name 'sb-sys:wait-until-fd-usable :recorder (curry #'recording-call/blocking 'sb-sys:wait-until-fd-usable))
 
   (record-name 'sb-bsd-sockets:get-host-by-name     :recorder (curry #'recording-call/blocking 'sb-bsd-sockets:get-host-by-name))
   (record-name 'sb-bsd-sockets:get-host-by-address  :recorder (curry #'recording-call/blocking 'sb-bsd-sockets:get-host-by-address))
@@ -220,7 +231,8 @@
 
   #+no (dolist (name '(read-character read-character-no read-line read-sequence))))
 
-(defmethod record ((thing (eql :io)))
+(defmethod record ((thing (eql :io)) &key recorder)
+  (declare (ignore recorder))
   (record-io))
 
 (defmethod unrecord ((thing (eql :io)))

@@ -1,6 +1,6 @@
 ;;;; source.lisp --- The advice-based event source.
 ;;;;
-;;;; Copyright (C) 2019 Jan Moringen
+;;;; Copyright (C) 2019, 2020 Jan Moringen
 ;;;;
 ;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
 
@@ -29,13 +29,18 @@
    :specification (error "missing required initarg :SPECIFICATION")))
 
 (defmethod recording:setup ((source source) (run t))
-  (format t "~A setting up~%" source)
+  (format *trace-output* "~A setting up~%" source)
 
   ;; Advice functions for tracing according to the specification.
-  (map nil #'record (specification source))
+  (map nil (lambda (entry)
+             (destructuring-bind (name &optional arguments?)
+                 (ensure-list entry)
+               (record name :arguments? arguments?)))
+       (specification source))
 
   ;; Set up a recording state with the specified parameters.
-  (setf *recording-state* (make-recording-state (or (depth-limit source) +unlimited+)))
+  (let ((depth-limit (or (depth-limit source) +unlimited+)))
+    (setf *recording-state* (make-recording-state depth-limit)))
 
   ;; Start a worker thread and tell the recorder about it.
   (setf (run source) run)
@@ -45,17 +50,17 @@
     (recording:note-source-thread source run thread :started)))
 
 (defmethod recording:start ((source source) (run t)) ; TODO store state in the source?
-  (format t "~A start~%" source)
+  (format *trace-output* "~A start~%" source)
 
   (setf (recording-state-recording? *recording-state*) t))
 
 (defmethod recording:stop ((source source) (run t))
-  (format t "~A stop~%" source)
+  (format *trace-output* "~A stop~%" source)
 
   (setf (recording-state-recording? *recording-state*) nil))
 
 (defmethod recording:teardown ((source source) (run t))
-  (format t "~A tearing down~%" source)
+  (format *trace-output* "~A tearing down~%" source)
 
   (setf (recording-state-recording? *recording-state*) :terminating)
   (let ((thread (thread source)))
@@ -65,4 +70,4 @@
   (setf *recording-state* nil)
 
   ;; Advice functions for tracing according to the specification.
-  (map nil #'unrecord (specification source)))
+  (map nil (compose #'unrecord #'ensure-car) (specification source)))
