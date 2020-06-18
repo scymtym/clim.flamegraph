@@ -1,6 +1,6 @@
 ;;;; protocol.lisp --- Protocol functions provided by model module.
 ;;;;
-;;;; Copyright (C) 2019 Jan Moringen
+;;;; Copyright (C) 2019, 2020 Jan Moringen
 ;;;;
 ;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
 
@@ -51,9 +51,29 @@
 ;;; consists of a list of samples corresponding to the stack of active
 ;;; function calls in a particular thread.
 
-(defgeneric map-threads (function run))
+(defgeneric map-threads (function run)
+  (:documentation
+   "Call FUNCTION with each thread information object stored in RUN."))
 
-(defgeneric map-traces (function run))
+(defgeneric threads (run)
+  (:documentation
+   "Return a sequence of all thread information objects stored in RUN."))
+
+(defgeneric map-functions (function run)
+  (:documentation
+   "Call FUNCTION with each function information object stored in RUN."))
+
+(defgeneric functions (run)
+  (:documentation
+   "Return a sequence of all function information objects stored in RUN."))
+
+(defgeneric map-traces (function run)
+  (:documentation
+   "Call FUNCTION with each trace stored in RUN."))
+
+(defgeneric traces (run)
+  (:documentation
+   "Return a sequence of all traces stored in RUN."))
 
 ;;; Trace protocol
 

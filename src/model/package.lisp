@@ -1,6 +1,6 @@
 ;;;; package.lisp --- Package definition for the model module.
 ;;;;
-;;;; Copyright (C) 2019 Jan Moringen
+;;;; Copyright (C) 2019, 2020 Jan Moringen
 ;;;;
 ;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
 
@@ -33,8 +33,9 @@
 
   ;; Run protocol
   (:export
-   #:map-threads
-   #:map-traces)
+   #:map-threads   #:threads
+   #:map-functions #:functions
+   #:map-traces    #:traces)
 
   ;; Trace protocol
   (:export
