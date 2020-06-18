@@ -6,6 +6,11 @@
 
 (cl:in-package #:clim.flamegraph.backend.sb-sprof)
 
+;;; `trace-buffer'
+;;;
+;;; A collection of program-counter samples obtained from one given
+;;; thread at a particular time.
+
 (defstruct (trace-buffer
             (:constructor make-trace-buffer (&key (depth-limit 1024))))
   (thread  nil)
@@ -23,19 +28,24 @@
                 :collect (make-trace-buffer :depth-limit depth-limit))
           `(simple-array trace-buffer (,+trace-ring-buffer-size+))))
 
+;;; `context'
+;;;
+;;; A ring buffer of `trace-buffer's.
+
 (defstruct (context
             (:constructor make-context
                 (&key (depth-limit 1024)
                  &aux (traces (make-trace-ring-buffer :depth-limit depth-limit)))))
+  ;; Configuration
   (depth-limit 0   :type array-index             :read-only t)
+  ;; Ring buffer
   (traces      nil :type trace-ring-buffer-array :read-only t)
   (read-head   0   :type array-index)
   (write-head  0   :type array-index))
 
 (defun produce-trace (context)
   (let ((write-head (context-write-head context)))
-    (aref (context-traces context) (mod write-head +trace-ring-buffer-size+))
-    ))
+    (aref (context-traces context) (mod write-head +trace-ring-buffer-size+))))
 
 (defun maybe-produce-trace (context)
   (let ((read-head  (context-read-head context))

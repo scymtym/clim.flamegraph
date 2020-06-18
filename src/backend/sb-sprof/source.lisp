@@ -1,6 +1,6 @@
 ;;;; source.lisp --- Source implementation provided by the backend.sb-sprof module.
 ;;;;
-;;;; Copyright (C) 2019 Jan Moringen
+;;;; Copyright (C) 2019, 2020 Jan Moringen
 ;;;;
 ;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
 
@@ -10,7 +10,7 @@
 
 ;;; `source'
 ;;;
-;;; This source produce traces by asynchronously interrupting threads
+;;; This source produces traces by asynchronously interrupting threads
 ;;; and sampling the respective call stacks. A background thread
 ;;; converts raw trace buffers to properly represented traces.
 
@@ -28,34 +28,50 @@
                        "Maximum recording call stack depth. Stack
                         frames beyond the limit will not be present in
                         the recorded trace.")
+   (%filter            :initarg  :filter
+                       :type     (or null function)
+                       :reader   filter
+                       :initform nil)
    ;; Runtime state
-   (%run               :accessor run)
-   (%thread            :accessor thread)))
+   (%run               :accessor run
+                       :documentation
+                       "The run into which finalized traces should be
+                        stored after conversion in the worker thread.")
+   (%thread            :accessor thread
+                       :documentation
+                       "The worker thread which performs the
+                        conversion from raw traces to finalized traces
+                        and their submission to the run in the
+                        background.")))
 
 (defmethod recording:setup ((source source) (run t))
+  ;; Prepare a context and a worker which consumes raw traces from the
+  ;; trace ringbuffer of the context. The context is global.
   (setf *context* (make-context :depth-limit (trace-depth-limit source)))
   (setf (run    source) run
         (thread source) (bt:make-thread (curry #'work run source)
                                         :name "sprof source worker"))
   ;; Install a signal handler that will be invoked periodically via a
-  ;; timer and the "profile" signal.
+  ;; timer and the "profile" signal and will produce and push raw
+  ;; traces into the ringbuffer of the context.
   (sb-sys:enable-interrupt
    sb-unix:sigprof #'sigprof-handler/cpu :synchronous t))
 
 (defmethod recording:start ((source source) (run t))
   ;; Configure a system timer to trigger our handler according to the
   ;; requested sample interval.
-  (multiple-value-bind (secs usecs)     ; TODO separate function
-      (multiple-value-bind (secs rest)
-          (truncate (sample-interval source))
-        (values secs (truncate (* rest 1000000))))
-    (sb-unix:unix-setitimer :profile secs usecs secs usecs)))
+  (multiple-value-bind (seconds fractional-seconds)
+      (truncate (sample-interval source))
+    (let ((microseconds (truncate (* fractional-seconds 1000000))))
+      (sb-unix:unix-setitimer :profile
+                              seconds microseconds
+                              seconds microseconds))))
 
 (defmethod recording:stop ((source source) (run t))
   (sb-unix:unix-setitimer :profile 0 0 0 0))
 
 (defmethod recording:teardown ((source source) (run t))
-  ; (sb-sys:enable-interrupt sb-unix:sigprof :default)
+  ;; (sb-sys:enable-interrupt sb-unix:sigprof :default) ; TODO
 
   (setf *context* nil) ; TODO put a condition variable into the context
   (bt:join-thread (thread source)))
@@ -67,22 +83,28 @@
 ;;; to the proper trace representation.
 
 (defun work (run source)
-  (loop :for context = *context*        ; TODO termination
+  (loop :with filter = (when-let ((filter (filter source)))
+                         (ensure-function filter))
+        :for context = *context*        ; TODO termination
         :while context
         :for trace-buffer = (maybe-consume-trace context)
         :when trace-buffer
-        :do (recording:add-chunk source run (list (buffer->trace trace-buffer)))
+        :do (let ((trace (buffer->trace trace-buffer filter)))
+              (recording:add-chunk source run (list trace)))
         :do (sleep .01)))
 
-(defun buffer->trace (buffer)
+(defun buffer->trace (buffer filter)
+  (declare (type (or null function) filter))
   (make-instance 'model::standard-trace
                  :thread  (trace-buffer-thread buffer)
                  :time    (trace-buffer-time buffer)
                  :samples (when (plusp (trace-buffer-count buffer))
                             (loop :with samples = (trace-buffer-samples buffer)
                                   :for i :downfrom (* 2 (1- (trace-buffer-count buffer))) :to 0 :by 2
-                                  :collect (make-instance 'model::standard-sample
-                                                          :name (info->name (aref samples i)))))))
+                                  :for name = (info->name (aref samples i))
+                                  :when (or (null filter)
+                                            (funcall filter name))
+                                  :collect (make-instance 'model::standard-sample :name name)))))
 
 (defun info->name (info)
   (flet ((clean-name (name)
@@ -118,8 +140,8 @@
 ;;; This code was initially based on the signal handler code in SBCL's
 ;;; sb-sprof contrib but has somewhat diverged by now.
 
-(declaim (inline collect-stacktrace))
 (defun collect-stacktrace (scp depth-limit buffer)
+  (declare (optimize speed))
   (sb-alien:with-alien ((scp (* sb-sys:os-context-t) :local scp))
     (let* ((pc-ptr (sb-vm:context-pc scp))
            (fp     (sb-vm::context-register scp #.sb-vm::ebp-offset)))
@@ -145,10 +167,9 @@
                                                sb-alien:system-area-pointer
                                                sb-alien:system-area-pointer))
                              sb-di::x86-call-context))
-        ;; (setf (trace-buffer-thread buffer) thread)
         (loop :with samples = (trace-buffer-samples buffer)
               :for frame :of-type array-index :below depth-limit
-              :for i :from 0 :by 2
+              :for i :of-type fixnum :from 0 :by 2
               :for (info pc-or-offset) = (multiple-value-list
                                           (sb-sprof::debug-info pc-ptr))
               :do (setf (aref samples (+ i 0)) info
@@ -169,7 +190,8 @@
               :finally (setf (trace-buffer-count buffer) frame))))))
 
 (defun sigprof-handler/cpu (signal code scp)
-  (declare (ignore signal code) (optimize speed (space 0))
+  (declare (ignore signal code)
+           (optimize speed (space 0))
            (sb-ext:disable-package-locks sb-di::x86-call-context)
            (sb-ext:muffle-conditions sb-ext:compiler-note)
            (type sb-alien:system-area-pointer scp))
