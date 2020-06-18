@@ -9,4 +9,6 @@
   :components  ((:module     "backend-sb-memory"
                  :pathname   "src/backend/sb-memory"
                  :serial     t
-                 :components ((:file       "package")))))
+                 :components ((:file       "package")
+                              (:file       "events")
+                              (:file       "source")))))

@@ -1,0 +1,4 @@
+* Introduction
+
+  This SBCL-specific backend provides a source for memory-related
+  events -- currently only start of gc and end of gc.
