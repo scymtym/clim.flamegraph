@@ -33,9 +33,9 @@
                        :reader   filter
                        :initform nil)
    ;; Runtime state
-   (%run               :accessor run
+   (%sink              :accessor sink
                        :documentation
-                       "The run into which finalized traces should be
+                       "The sink into which finalized traces should be
                         stored after conversion in the worker thread.")
    (%thread            :accessor thread
                        :documentation
@@ -44,12 +44,12 @@
                         and their submission to the run in the
                         background.")))
 
-(defmethod recording:setup ((source source) (run t))
+(defmethod recording:setup ((source source) (sink t))
   ;; Prepare a context and a worker which consumes raw traces from the
   ;; trace ringbuffer of the context. The context is global.
   (setf *context* (make-context :depth-limit (trace-depth-limit source)))
-  (setf (run    source) run
-        (thread source) (bt:make-thread (curry #'work run source)
+  (setf (sink   source) sink
+        (thread source) (bt:make-thread (curry #'work source sink)
                                         :name "sprof source worker"))
   ;; Install a signal handler that will be invoked periodically via a
   ;; timer and the "profile" signal and will produce and push raw
@@ -57,7 +57,7 @@
   (sb-sys:enable-interrupt
    sb-unix:sigprof #'sigprof-handler/cpu :synchronous t))
 
-(defmethod recording:start ((source source) (run t))
+(defmethod recording:start ((source source) (sink t))
   ;; Configure a system timer to trigger our handler according to the
   ;; requested sample interval.
   (multiple-value-bind (seconds fractional-seconds)
@@ -67,10 +67,10 @@
                               seconds microseconds
                               seconds microseconds))))
 
-(defmethod recording:stop ((source source) (run t))
+(defmethod recording:stop ((source source) (sink t))
   (sb-unix:unix-setitimer :profile 0 0 0 0))
 
-(defmethod recording:teardown ((source source) (run t))
+(defmethod recording:teardown ((source source) (sink t))
   ;; (sb-sys:enable-interrupt sb-unix:sigprof :default) ; TODO
 
   (setf *context* nil) ; TODO put a condition variable into the context
@@ -82,7 +82,7 @@
 ;;; asynchronously pop trace buffers off the context and convert them
 ;;; to the proper trace representation.
 
-(defun work (run source)
+(defun work (source sink)
   (loop :with filter = (when-let ((filter (filter source)))
                          (ensure-function filter))
         :for context = *context*        ; TODO termination
@@ -90,7 +90,7 @@
         :for trace-buffer = (maybe-consume-trace context)
         :when trace-buffer
         :do (let ((trace (buffer->trace trace-buffer filter)))
-              (recording:add-chunk source run (list trace)))
+              (recording:add-chunk source sink (list trace)))
         :do (sleep .01)))
 
 (defun buffer->trace (buffer filter)

@@ -21,25 +21,25 @@
                                  :thread       thread
                                  :min-duration (min-duration aggregation-state))))
 
-(defun work (run source)
+(defun work (source sink)
   (loop :with aggregation-state = (make-instance 'aggregation-state
                                                  :min-duration (floor (min-duration source)
                                                                       1/1000000))
         :for  state             = *recording-state*
         :when state
-        :do   (process-state run source state aggregation-state)
+        :do   (process-state sink source state aggregation-state)
               (when (eq (recording-state-recording? state) :terminating)
-                (process-state run source state aggregation-state)
+                (process-state sink source state aggregation-state)
                 (return))
               (sleep .01))) ; TODO
 
-(defun process-state (run source state aggregation-state)
+(defun process-state (sink source state aggregation-state)
   (maphash (lambda (thread thread-state)
              (loop :with  t-a-s = (ensure-thread-aggregation-state aggregation-state thread)
                    :for   event = (maybe-consume-event thread-state)
                    :while event
                    :do    (when-let ((result (process-event event t-a-s)))
-                            (recording:add-chunk source run (list result)))))
+                            (recording:add-chunk source sink (list result)))))
            (recording-state-thread-states state)))
 
 ;;; Ordinary calls with and without values (nested within one thread)

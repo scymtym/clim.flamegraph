@@ -9,19 +9,17 @@
 (defclass source ()
   ())
 
-(defmethod record:setup ((source source) (run t))
-  )
+(defmethod record:setup ((source source) (sink t))
+  (values))
 
-(defmethod record:start ((source source) (run t))
-  (record:add-chunk
-   source run (list (make-event :initial-memory (time:real-time) (sb-vm::dynamic-usage))))
+(defmethod record:start ((source source) (sink t))
+  (record:add-chunk source sink (list (make-event :initial-memory)))
   (sb-int:encapsulate 'sb-kernel:sub-gc 'gc-event
-                      (a:curry #'instrumented-sub-gc source run)))
+                      (a:curry #'instrumented-sub-gc source sink)))
 
-(defmethod record:stop ((source source) (run t))
+(defmethod record:stop ((source source) (sink t))
   (sb-int:unencapsulate 'sb-kernel:sub-gc 'gc-event)
-  (record:add-chunk
-   source run (list (make-event :final-memory (time:real-time) (sb-vm::dynamic-usage)))))
+  (record:add-chunk source sink (list (make-event :final-memory))))
 
-(defmethod record:teardown ((source source) (run t))
-  )
+(defmethod record:teardown ((source source) (sink t))
+  (values))

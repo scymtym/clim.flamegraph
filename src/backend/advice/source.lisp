@@ -23,12 +23,12 @@
                     :reader   min-duration
                     :initform 0)
    ;; Runtime state
-   (%run            :accessor run)
+   (%sink           :accessor sink)
    (%thread         :accessor thread))
   (:default-initargs
    :specification (error "missing required initarg :SPECIFICATION")))
 
-(defmethod recording:setup ((source source) (run t))
+(defmethod recording:setup ((source source) (sink t))
   (format *trace-output* "~A setting up~%" source)
 
   ;; Advice functions for tracing according to the specification.
@@ -43,29 +43,29 @@
     (setf *recording-state* (make-recording-state depth-limit)))
 
   ;; Start a worker thread and tell the recorder about it.
-  (setf (run source) run)
-  (let ((thread (bt:make-thread (curry #'work run source)
+  (setf (sink source) sink)
+  (let ((thread (bt:make-thread (curry #'work source sink)
                                 :name "advice source worker")))
     (setf (thread source) thread)
-    (recording:note-source-thread source run thread :started)))
+    (recording:note-source-thread source sink thread :started)))
 
-(defmethod recording:start ((source source) (run t)) ; TODO store state in the source?
+(defmethod recording:start ((source source) (sink t)) ; TODO store state in the source?
   (format *trace-output* "~A start~%" source)
 
   (setf (recording-state-recording? *recording-state*) t))
 
-(defmethod recording:stop ((source source) (run t))
+(defmethod recording:stop ((source source) (sink t))
   (format *trace-output* "~A stop~%" source)
 
   (setf (recording-state-recording? *recording-state*) nil))
 
-(defmethod recording:teardown ((source source) (run t))
+(defmethod recording:teardown ((source source) (sink t))
   (format *trace-output* "~A tearing down~%" source)
 
   (setf (recording-state-recording? *recording-state*) :terminating)
   (let ((thread (thread source)))
     (bt:join-thread thread)
-    (recording:note-source-thread source run thread :stopped))
+    (recording:note-source-thread source sink thread :stopped))
 
   (setf *recording-state* nil)
 

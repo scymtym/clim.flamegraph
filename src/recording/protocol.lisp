@@ -11,31 +11,31 @@
 ;;; These generic functions are called to prepare, start, stop and
 ;;; teardown recording of a given run using a given recorder.
 
-(defgeneric setup (recorder run)
+(defgeneric setup (recorder sink)
   (:documentation
-   "Prepare RECORDER for recording into RUN.
+   "Prepare RECORDER for recording into SINK.
 
 Any preparation, especially if it is expensive, that can be done
 without starting the recording should be done in a method on this
 generic function."))
 
-(defgeneric start (recorder run))
+(defgeneric start (recorder sink))
 
-(defgeneric stop (recorder run))
+(defgeneric stop (recorder sink))
 
-(defgeneric teardown (recorder run))
+(defgeneric teardown (recorder sink))
 
 ;;; Source protocol
 ;;;
 ;;; Extends recording lifecycle protocol
 
-(defgeneric add-chunk (source run chunk)
+(defgeneric add-chunk (source sink chunk)
   (:documentation
    "Add CHUNK produced by SOURCE to run.
 
 CHUNK is a sequence of events."))
 
-(defgeneric note-source-thread (source run thread event)
+(defgeneric note-source-thread (source sink thread event)
   (:documentation
    "Inform the recorder that THREAD is used by SOURCE for RUN.
 
@@ -55,9 +55,9 @@ CHUNK is a sequence of events."))
 
 (defgeneric make-run (recorder)) ; TODO make-builder? return two values: a run and a builder?
 
-(defmethod handle-chunk (recorder run chunk)) ; TODO run -> builder
+(defmethod handle-chunk (recorder sink chunk))
 
-(defmethod handle-item (recorder run item))
+(defmethod handle-item (recorder sink item))
 
 ;;; Recorder construction protocol
 
