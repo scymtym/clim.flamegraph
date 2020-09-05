@@ -34,13 +34,15 @@
               (sleep .01))) ; TODO
 
 (defun process-state (sink source state aggregation-state)
-  (maphash (lambda (thread thread-state)
-             (loop :with  t-a-s = (ensure-thread-aggregation-state aggregation-state thread)
-                   :for   event = (maybe-consume-event thread-state)
-                   :while event
-                   :do    (when-let ((result (process-event event t-a-s)))
-                            (recording:add-chunk source sink (list result)))))
-           (recording-state-thread-states state)))
+  (let ((chunk (make-array 128 :adjustable t :fill-pointer 0)))
+    (maphash (lambda (thread thread-state)
+               (loop :with  t-a-s = (ensure-thread-aggregation-state aggregation-state thread)
+                     :for   event = (maybe-consume-event thread-state)
+                     :while event
+                     :do    (when-let ((result (process-event event t-a-s)))
+                              (vector-push-extend result chunk))))
+             (recording-state-thread-states state))
+    (recording:add-chunk source sink chunk)))
 
 ;;; Ordinary calls with and without values (nested within one thread)
 ;;;
@@ -94,6 +96,7 @@
                              ,@(case values
                                  (:values `(:values (event-values event)))
                                  (:object `(:object (first (event-values event)))))))))
+            (declare (type (and (not simple-vector) (vector t)) stack))
             (vector-push-extend new stack)
             nil))))
 
@@ -105,27 +108,28 @@
     model::wait-region/inner model::wait-region/root :object))
 
 (flet ((process-leave-event (event state)
-         (when-let* ((stack (stack state))
-                     (index (fill-pointer stack))
-                     (top   (if (plusp index)
-                                (aref stack (1- index))
-                                (progn
-                                  (warn "Dropping ~A event since there is no corresponding enter event on the stack" event)
-                                  nil))))
-           (when (and top (eq (model:name top) (event-name event)))
-             (vector-pop stack)
-             (let ((min-duration (min-duration state))
-                   (end-time     (event-time event)))
-               (cond ((>= (- end-time (model::%start-time top)) min-duration)
-                      (setf (model:end-time top) end-time)
-                      #+no (when (null (model:children top))
-                             (to-leaf! top))
-                      (when (= index 1) ; TODO could check for root-call-region or similar
-                        top))
-                     (t
-                      (unless (= index 1)
-                        (pop (model:children (aref stack (- index 2)))))
-                      nil)))))))
+         (let* ((stack (stack state))
+               (index (fill-pointer stack)))
+           (declare (type (and (not simple-vector) (vector t)) stack))
+           (when-let ((top (if (plusp index)
+                               (aref stack (1- index))
+                               (progn
+                                 (warn "Dropping ~A event since there is no corresponding enter event on the stack" event)
+                                 nil))))
+             (when (and top (eq (model:name top) (event-name event)))
+               (vector-pop stack)
+               (let ((min-duration (min-duration state))
+                     (end-time     (event-time event)))
+                 (cond ((>= (- end-time (model::%start-time top)) min-duration)
+                        (setf (model:end-time top) end-time)
+                        #+no (when (null (model:children top))
+                               (to-leaf! top))
+                        (when (= index 1) ; TODO could check for root-call-region or similar
+                          top))
+                       (t
+                        (unless (= index 1)
+                          (pop (model:children (aref stack (- index 2)))))
+                        nil))))))))
   (declare (inline process-leave-event))
 
   (defmethod process-event-using-kind ((kind  (eql :leave))
