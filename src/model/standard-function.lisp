@@ -49,6 +49,8 @@
     ; (:total-run-time ,(total-run-time object) ""      ((:after :call-count)))
     ))
 
+;;; `call-mixin'
+
 (defclass call-mixin ()
   ((%called-function :initarg :called-function
                      :reader  called-function))

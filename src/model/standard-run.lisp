@@ -15,7 +15,7 @@
    (%functions :reader  functions
                :writer  (setf %functions))
    (%traces    :reader  traces
-               :writer  (setf %traces))))
+               :writer  (setf %traces)))) ; TODO call this events? or separate events slot?
 
 (defun temporal-bounds-in-traces (traces)
   (let ((start most-positive-fixnum)
@@ -50,7 +50,10 @@
 
 (defun functions-in-traces (traces)
   (let ((functions (make-hash-table :test #'equal)))
-    (map nil (rcurry #'register-functions functions) traces)
+    (map nil (lambda (trace)
+               (when (compute-applicable-methods #'register-functions (list trace functions))
+                 (register-functions trace functions)))
+         traces)
     (coerce (hash-table-values functions) 'simple-vector))) ; TODO keeping the hash-table would be useful
 
 (defmethod shared-initialize :after ((instance   standard-run)
@@ -91,6 +94,12 @@
 (defmethod print-items:print-items append ((object standard-run))
   `((:thread-count ,(length (threads object)) " ~:D thread~:P" ((:after :duration)))
     (:trace-count  ,(length (traces object))  " ~:D trace~:P"  ((:after :thread-count)))))
+
+(defmethod map-threads ((function function) (run standard-run))
+  (map nil function (threads run)))
+
+(defmethod map-functions ((function function) (run standard-run))
+  (map nil function (functions run)))
 
 (defmethod map-traces ((function function) (run standard-run))
   (map nil function (traces run)))
