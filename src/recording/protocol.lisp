@@ -1,14 +1,23 @@
 ;;;; protocol.lisp --- Protocol generic functions provided by the recording module.
 ;;;;
-;;;; Copyright (C) 2019 Jan Moringen
+;;;; Copyright (C) 2019, 2020 Jan Moringen
 ;;;;
 ;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
 
 (cl:in-package #:clim.flamegraph.recording)
 
 ;;; Recording lifecycle protocol
+;;;
+;;; These generic functions are called to prepare, start, stop and
+;;; teardown recording of a given run using a given recorder.
 
-(defgeneric setup (recorder run))
+(defgeneric setup (recorder run)
+  (:documentation
+   "Prepare RECORDER for recording into RUN.
+
+Any preparation, especially if it is expensive, that can be done
+without starting the recording should be done in a method on this
+generic function."))
 
 (defgeneric start (recorder run))
 
@@ -20,7 +29,11 @@
 ;;;
 ;;; Extends recording lifecycle protocol
 
-(defgeneric add-chunk (source run chunk))
+(defgeneric add-chunk (source run chunk)
+  (:documentation
+   "Add CHUNK produced by SOURCE to run.
+
+CHUNK is a sequence of events."))
 
 (defgeneric note-source-thread (source run thread event)
   (:documentation
@@ -30,7 +43,7 @@
     was started or stopped.
 
     This function can only be called in the setup and teardown
-    phases."))
+    phases of the recording lifecycle."))
 
 ;;; Recorder protocol
 ;;;
