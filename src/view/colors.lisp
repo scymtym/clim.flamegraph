@@ -9,6 +9,8 @@
 (defun dark? (color)
   (< (clim:color-ihs color) .5))
 
+(declaim (ftype (function (integer &key (:style (member :light :dark)) (:desaturize? t)))
+                hash-color))
 (defun hash-color (hash &key (style :light) desaturize?)
   (clim:make-ihs-color (case style
                          (:light 1)
@@ -20,6 +22,7 @@
                           (if desaturize? .2 1))))
 
 (defun color-variant (base index &key (style :light))
+  (declare (ignore style))
   (let* ((index  (mod index 10))
          (offset (* .2d0 1/9 index)))
     (multiple-value-bind (intensity hue saturation) (clim:color-ihs base)
