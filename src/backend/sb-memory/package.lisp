@@ -14,4 +14,7 @@
    (#:time   #:clim.flamegraph.time)
    (#:model  #:clim.flamegraph.model)
 
-   (#:record #:clim.flamegraph.recording)))
+   (#:record #:clim.flamegraph.recording))
+
+  (:export
+   #:source))
