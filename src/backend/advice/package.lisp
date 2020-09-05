@@ -1,6 +1,6 @@
 ;;;; package.lisp --- Package definition for the backend.advice module.
 ;;;;
-;;;; Copyright (C) 2019 Jan Moringen
+;;;; Copyright (C) 2019, 2020 Jan Moringen
 ;;;;
 ;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
 
@@ -14,4 +14,7 @@
    (#:model     #:clim.flamegraph.model)
 
    (#:recording #:clim.flamegraph.recording)
-   (#:backend   #:clim.flamegraph.backend)))
+   (#:backend   #:clim.flamegraph.backend))
+
+  (:export
+   #:source))
