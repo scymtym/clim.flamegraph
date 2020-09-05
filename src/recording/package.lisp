@@ -1,6 +1,6 @@
 ;;;; package.lisp --- Package definition for the recording module.
 ;;;;
-;;;; Copyright (C) 2019 Jan Moringen
+;;;; Copyright (C) 2019, 2020 Jan Moringen
 ;;;;
 ;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
 
@@ -38,7 +38,8 @@
 
   ;; Macros
   (:export
-   #:with-recording))
+                    #:call-with-recording-into
+   #:with-recording #:call-with-recording))
 
 (cl:in-package #:clim.flamegraph.recording)
 
