@@ -87,11 +87,11 @@
                          (ensure-function filter))
         :for context = *context*        ; TODO termination
         :while context
-        :for trace-buffer = (maybe-consume-trace context)
-        :when trace-buffer
-        :do (let ((trace (buffer->trace trace-buffer filter)))
-              (recording:add-chunk source sink (list trace)))
-        :do (sleep .01)))
+        :do (loop :for trace-buffer = (maybe-consume-trace context)
+                  :while trace-buffer
+                  :collect (buffer->trace trace-buffer filter) :into traces
+                  :finally (recording:add-chunk source sink traces))
+            (sleep .01)))
 
 (defun buffer->trace (buffer filter)
   (declare (type (or null function) filter))
