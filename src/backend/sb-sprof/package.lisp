@@ -1,6 +1,6 @@
 ;;;; package.lisp --- Package definition for the backend.sb-sprof module.
 ;;;;
-;;;; Copyright (C) 2019 Jan Moringen
+;;;; Copyright (C) 2019, 2020 Jan Moringen
 ;;;;
 ;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
 
@@ -17,4 +17,7 @@
    (#:time      #:clim.flamegraph.time)
    (#:model     #:clim.flamegraph.model)
 
-   (#:recording #:clim.flamegraph.recording)))
+   (#:recording #:clim.flamegraph.recording))
+
+  (:export
+   #:source))
