@@ -14,24 +14,32 @@
 (defclass standard-function (name-mixin
                              print-items:print-items-mixin)
   (;; Threads
-   (%calling-threads :initarg  :calling-threads
-                     :type     list
-                     :accessor calling-threads
-                     :initform '())
+   (%calling-threads         :initarg  :calling-threads
+                             :type     list
+                             :accessor calling-threads
+                             :initform '())
    ;; Calls (from deterministic profiling)
-   (%call-count      :initarg  :call-count
-                     :type     non-negative-integer
-                     :accessor call-count
-                     :initform 0)
-   (%total-run-time  :initarg  :total-run-time
-                     :type     non-negative-real
-                     :accessor total-run-time
-                     :initform 0)
-   ;; Profiler hits
-   (%hit-count       :initarg  :hit-count
-                     :type     non-negative-integer
-                     :accessor hit-count
-                     :initform 0)))
+   (%call-count              :initarg  :call-count
+                             :type     non-negative-integer
+                             :accessor call-count
+                             :initform 0)
+   (%total-run-time          :initarg  :total-run-time
+                             :type     non-negative-real
+                             :accessor total-run-time
+                             :initform 0)
+   ;; Hits (from statistical profiling)
+   (%hit-count               :initarg  :hit-count
+                             :type     non-negative-integer
+                             :accessor hit-count
+                             :initform 0)
+   (%non-recursive-hit-count :initarg  :non-recursive-hit-count
+                             :type     non-negative-integer
+                             :accessor non-recursive-hit-count
+                             :initform 0)
+   (%self-hit-count          :initarg  :self-hit-count
+                             :type     non-negative-integer
+                             :accessor self-hit-count
+                             :initform 0)))
 
 (defmethod name-string ((name standard-function) &key qualified?) ; TODO hack
   (name-string (name name) :qualified? qualified?))

@@ -113,12 +113,26 @@
 (defmethod print-items:print-items append ((object standard-trace))
   `((:sample-count ,(length (samples object)) "~:D sample~:P")))
 
-(defmethod register-functions ((node standard-trace) (functions hash-table))
-  (let ((thread (thread node)))
+(defmethod register-functions ((node standard-trace) (functions hash-table)
+                               &key (thread (thread node)))
+  (let ((parent-function nil)
+        (path            '()))
     (map-samples (lambda (sample)
                    (let ((function (register-function sample functions)))
                      (pushnew thread (calling-threads function) :test #'eq)
-                     (incf (hit-count function))))
+
+                     (incf (hit-count function))
+
+                     (incf (self-hit-count function))
+                     (when parent-function
+                       (decf (self-hit-count parent-function)))
+
+                     (unless (find function path :test #'eq)
+                       (incf (non-recursive-hit-count function)))
+
+                     ;;
+                     (setf parent-function function)
+                     (push function path)))
                  node)))
 
 ;;; `standard-thread'

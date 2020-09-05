@@ -26,6 +26,17 @@
 (defmethod print-items:print-items append ((object inner-region-mixin))
   `((:child-count ,(length (children object)) " (~D)" ((:after :duration)))))
 
+(defmethod register-functions ((node inner-region-mixin) (functions hash-table)
+                               &key (thread #+maybe (error "missing keyword argument ~S" :thread)))
+  (labels ((rec (node)
+             (let ((function (register-function node functions)))
+               (when thread
+                 (pushnew thread (calling-threads function) :test #'eq))
+               (incf (call-count function))
+               (incf (total-run-time function) (duration node)))
+             (map nil #'rec (children node))))
+    (rec node)))
+
 ;;; `root-region-mixin'
 
 (defclass root-region-mixin ()
@@ -33,15 +44,9 @@
             :reader  thread)))
 
 ;; TODO the function should be take a function instead of a hash-table, maybe?
-(defmethod register-functions ((node root-region-mixin) (functions hash-table))
-  (let ((thread (thread node)))
-    (labels ((rec (node)
-               (let ((function (register-function node functions)))
-                 (pushnew thread (calling-threads function) :test #'eq)
-                 (incf (call-count function))
-                 (incf (total-run-time function) (duration node)))
-               (map nil #'rec (children node))))
-      (rec node))))
+(defmethod register-functions :around ((node root-region-mixin) (functions hash-table)
+                                       &key (thread (thread node)))
+  (call-next-method node functions :thread thread))
 
 ;;; `standard-region'
 
