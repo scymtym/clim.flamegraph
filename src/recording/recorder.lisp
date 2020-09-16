@@ -38,10 +38,16 @@
   (map nil (rcurry #'start recorder) (sources recorder)))
 
 (defmethod stop ((recorder standard-recorder) (sink t))
-  (map nil (rcurry #'stop recorder) (sources recorder)))
+  (map nil (lambda (source)
+             (with-simple-restart (continue "Skip stopping source ~A" source)
+               (stop source recorder)))
+       (sources recorder)))
 
 (defmethod teardown ((recorder standard-recorder) (sink t))
-  (map nil (rcurry #'teardown recorder) (sources recorder))
+  (map nil (lambda (source)
+             (with-simple-restart (continue "Skip tear-down of source ~A" source)
+               (teardown source recorder)))
+       (sources recorder))
   (values))
 
 (defmethod teardown ((recorder standard-recorder) (sink standard-run-builder))
