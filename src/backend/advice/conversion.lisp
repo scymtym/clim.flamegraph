@@ -70,79 +70,104 @@
   (process-event-using-kind (event-kind event) event state))
 
 (macrolet
-    ((define-enter-handler (kind inner-call-class root-call-class values)
+    ((define-event-handler ((kind) &body body)
        `(defmethod process-event-using-kind ((kind  (eql ,kind))
                                              (event event)
                                              (state thread-aggregation-state))
           (let* ((stack (stack state))
-                 (top   (let ((index (fill-pointer stack)))
-                          (when (plusp index)
-                            (aref stack (1- index)))))
                  (name  (event-name event))
-                 (time  (event-time event))
-                 (new   (if top
-                            (let ((region (make-instance
-                                           ',inner-call-class
+                 (time  (event-time event)))
+            (declare (type (and (not simple-vector) (vector t)) stack))
+            (macrolet ((pop-region (&key (name 'name))
+                         `(let ((index (fill-pointer stack)))
+                            (when-let ((top (if (plusp index)
+                                                (aref stack (1- index))
+                                                (progn
+                                                  (warn "~@<Dropping ~A event since there is no corresponding enter event on the stack.~@:>"
+                                                        event)
+                                                  nil))))
+                              (when (eq (model:name top) ,name)
+                                (vector-pop stack)
+                                (let ((min-duration (min-duration state))
+                                      (end-time     time))
+                                  (cond ((>= (- end-time (model::%start-time top)) min-duration)
+                                         (setf (model:end-time top) end-time)
+                                         #+no (when (null (model:children top))
+                                                (to-leaf! top))
+                                         (when (= index 1) ; TODO could check for root-call-region or similar
+                                           top))
+                                        (t
+                                         (unless (= index 1)
+                                           (pop (model:children (aref stack (- index 2)))))
+                                         nil)))))))
+                       (push-region (inner-call-class root-call-class
+                                     &key values (possibly-top? t))
+                         `(let* (,@(when possibly-top?
+                                     `((top (let ((index (fill-pointer stack)))
+                                              (when (plusp index)
+                                                (aref stack (1- index)))))))
+                                 (new (if ,(if possibly-top?
+                                               'top
+                                               nil)
+                                          ,(if possibly-top?
+                                               `(let ((region (make-instance
+                                                               ',inner-call-class
+                                                               :name       name
+                                                               :start-time time
+                                                               ,@(case values
+                                                                   (:values `(:values (event-values event)))
+                                                                   (:object `(:object (event-values event)))))))
+                                                  (push region (model:children top))
+                                                  region)
+                                               nil)
+                                          (make-instance
+                                           ',root-call-class
+                                           :thread     (thread state)
                                            :name       name
                                            :start-time time
                                            ,@(case values
                                                (:values `(:values (event-values event)))
-                                               (:object `(:object (first (event-values event))))))))
-                              (push region (model:children top))
-                              region)
-                            (make-instance
-                             ',root-call-class
-                             :thread     (thread state)
-                             :name       name
-                             :start-time time
-                             ,@(case values
-                                 (:values `(:values (event-values event)))
-                                 (:object `(:object (first (event-values event)))))))))
-            (declare (type (and (not simple-vector) (vector t)) stack))
-            (vector-push-extend new stack)
-            nil))))
+                                               (:object `(:object (event-values event))))))))
+                            (vector-push-extend new stack))))
+              ,@body)))))
 
-  (define-enter-handler :enter
-    model::call-region/inner model::call-region/root nil)
-  (define-enter-handler :enter/args
-    model::call-region/inner/values model::call-region/root/values :values)
-  (define-enter-handler :enter/block
-    model::wait-region/inner model::wait-region/root :object))
+  (define-event-handler (:enter)
+    (push-region model::call-region/inner model::call-region/root)
+    nil)
 
-(flet ((process-leave-event (event state)
-         (let* ((stack (stack state))
-               (index (fill-pointer stack)))
-           (declare (type (and (not simple-vector) (vector t)) stack))
-           (when-let ((top (if (plusp index)
-                               (aref stack (1- index))
-                               (progn
-                                 (warn "Dropping ~A event since there is no corresponding enter event on the stack" event)
-                                 nil))))
-             (when (and top (eq (model:name top) (event-name event)))
-               (vector-pop stack)
-               (let ((min-duration (min-duration state))
-                     (end-time     (event-time event)))
-                 (cond ((>= (- end-time (model::%start-time top)) min-duration)
-                        (setf (model:end-time top) end-time)
-                        #+no (when (null (model:children top))
-                               (to-leaf! top))
-                        (when (= index 1) ; TODO could check for root-call-region or similar
-                          top))
-                       (t
-                        (unless (= index 1)
-                          (pop (model:children (aref stack (- index 2)))))
-                        nil))))))))
-  (declare (inline process-leave-event))
+  (define-event-handler (:enter/args)
+    (push-region model::call-region/inner/values model::call-region/root/values
+                 :values :values)
+    nil)
 
-  (defmethod process-event-using-kind ((kind  (eql :leave))
-                                       (event event)
-                                       (state thread-aggregation-state))
-    (process-leave-event event state))
+  (define-event-handler (:leave)
+    (pop-region))
 
-  (defmethod process-event-using-kind ((kind  (eql :leave/unblock))
-                                       (event event)
-                                       (state thread-aggregation-state))
-    (process-leave-event event state)))
+  (define-event-handler (:enter/block)
+      ; (fresh-line *trace-output*)
+      ; (princ event *trace-output*)
+    (push-region model::wait-region/inner model::wait-region/root
+                 :values :object)
+    nil)
+
+  (define-event-handler (:leave/block)
+    (prog1
+        (pop-region) ; wait-region
+      (push-region model::block-region/inner model::block-region/root
+                   :values :object)))
+
+  (define-event-handler (:enter/unblock)
+      ; (fresh-line *trace-output*)
+      ; (princ event *trace-output*)
+    (prog1
+        (pop-region :name (event-values event)) ; block region
+      (push-region model::call-region/inner model::call-region/root)))
+
+  (define-event-handler (:leave/unblock)
+      ; (fresh-line *trace-output*)
+      ; (princ event *trace-output*)
+    ; (pop-region) ; call region
+    (pop-region))) ; wait region
 
 (defmethod to-leaf! ((region model::call-region/inner)) ; TODO this is too expensive
   (change-class region 'model::call-region/leaf))

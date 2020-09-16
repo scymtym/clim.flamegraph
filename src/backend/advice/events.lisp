@@ -38,39 +38,43 @@
 
 (defvar *call-count* (cons 0 0))
 
-(defun recording-call (name function &rest args)
-  (declare (dynamic-extent args))
-  (sb-ext:atomic-incf (car *call-count*))
-  (let ((*context* (list* name *context*)))
-   (with-thread-state-and-nesting (state)
-     (progn
-       (let ((*recording-state* nil)
-             (*thread-state*    nil))   ; TODO flip flag in state?
-         (note-enter state name))
-       (unwind-protect
-            (sb-sys:with-interrupts
-              (let ((*in* nil))
-                (apply function args)))
-         (let ((*recording-state* nil)
-               (*thread-state*    nil))
-           (note-leave state name))))
-     (apply function args))))
+(defun make-recording-call (name)
+  (named-lambda recording-call (function &rest args)
+    (declare (type function function)
+             (dynamic-extent args))
+    (sb-ext:atomic-incf (car *call-count*))
+    (let ((*context* (list* name *context*)))
+      (with-thread-state-and-nesting (state)
+        (progn
+          (let ((*recording-state* nil)
+                (*thread-state*    nil))   ; TODO flip flag in state?
+            (note-enter state name))
+          (unwind-protect
+               (sb-sys:with-interrupts
+                 (let ((*in* nil))
+                   (apply function args)))
+            (let ((*recording-state* nil)
+                  (*thread-state*    nil))
+              (note-leave state name))))
+        (apply function args)))))
 
-(defun recording-call/args (name function &rest args)
-  ;; (declare (dynamic-extent args))
-  (sb-ext:atomic-incf (cdr *call-count*))
-  (with-thread-state-and-nesting (state)
-    (progn
-      (let ((*recording-state* nil)
-            (*thread-state*    nil))    ; TODO flip flag in state?
-        (note-enter/args state name args))
-      (unwind-protect
-           (sb-sys:with-interrupts
-             (apply function args))
+(defun make-recording-call/args (name)
+  (named-lambda recording-call/args (function &rest args)
+    (declare (type function function)
+             (dynamic-extent args))
+    (sb-ext:atomic-incf (cdr *call-count*))
+    (with-thread-state-and-nesting (state)
+      (progn
         (let ((*recording-state* nil)
-              (*thread-state*    nil))
-          (note-leave state name))))
-    (apply function args)))
+              (*thread-state*    nil))    ; TODO flip flag in state?
+          (note-enter/args state name args))
+        (unwind-protect
+             (sb-sys:with-interrupts
+               (apply function args))
+          (let ((*recording-state* nil)
+                (*thread-state*    nil))
+            (note-leave state name))))
+      (apply function args))))
 
 #+later (defun call-and-record/args+values (name function &rest args)
   (with-thread-state-and-nesting (state)
@@ -84,11 +88,29 @@
         ))))
 
 ;;; Blocking calls
+;;;
+;;; There are two flavors:
+;;;
+;;; 1) `wait-for-SOMETHING' or `call-with-SOMETHING-locked'. In this
+;;;    case, the blocking operation corresponds to a single function
+;;;    call. We instrument the function with `recording-call/blocking'
+;;;    with calls `note-enter/block' and `note-leave/unblock' around
+;;;    the function call.
+;;;
+;;; 2) A pair `lock-SOMETHING' and `unlock-SOMETHING'. In this case,
+;;;    the blocking operation corresponds to the region that starts
+;;;    when `lock-SOMETHING' returns and ends when `unlock-SOMETHING'
+;;;    is called. We instruction the functions with
+;;;    `recording-call/block' and `recording-call/unblock'
+;;;    respectively.
 
-(defun note-enter/block (state name args)
-  (declare (dynamic-extent args))
+(defun note-enter/block (state name object)
   (recording-event (event state :enter/block name)
-    (setf (event-values event) (list (first args)))))
+    (setf (event-values event) object)))
+
+(defun note-leave/block (state name object)
+  (recording-event (event state :leave/block name)
+    (setf (event-values event) object))) ; TODO object not needed
 
 (defun note-enter/unblock (state name object)
   (recording-event (event state :enter/unblock name)
@@ -98,35 +120,41 @@
   (recording-event (event state :leave/unblock name)
     (setf (event-values event) object))) ; TODO object not needed
 
-(defun recording-call/block (name function object &rest args)
-  (declare (dynamic-extent args))
-  (with-thread-state-and-nesting (state)
-    (progn
-      (note-enter/block state name object)
-      (unwind-protect
-           (apply function object args)
-        (note-leave state name)))
-    (apply function object args)))
+(defun make-recording-call/block (name)
+  (alexandria:named-lambda recording-call/block (function object &rest args)
+    (declare (type function function)
+             (dynamic-extent args))
+    (with-thread-state-and-nesting (state)
+      (progn
+        (note-enter/block state name object)
+        (unwind-protect
+             (apply function object args)
+          (note-leave/block state name object)))
+      (apply function object args))))
 
-(defun recording-call/unblock (name function object &rest args)
-  (declare (dynamic-extent args))
-  (with-thread-state-and-nesting (state)
-    (progn
-      (note-enter/unblock state name object)
-      (unwind-protect
-           (apply function object args)
-        (note-leave state name)))
-    (apply function object args)))
+(defun make-recording-call/unblock (name block-name)
+  (alexandria:named-lambda recording-call/unblock (function object &rest args)
+    (declare (type function function)
+             (dynamic-extent args))
+    (with-thread-state-and-nesting (state)
+      (progn
+        (note-enter/unblock state name block-name)
+        (unwind-protect
+             (apply function object args)
+          (note-leave state name)))
+      (apply function object args))))
 
-(defun recording-call/blocking (name function &rest args)
-  (declare (dynamic-extent args))
-  (with-thread-state-and-nesting (state)
-    (progn
-      (note-enter/block state name args)
-      (unwind-protect
-           (apply function args)
-        (note-leave/unblock state name (first args)))) ; TODO the object is not needed here
-    (apply function args)))
+(defun make-recording-call/blocking (name)
+  (named-lambda recording-call/blocking (function &rest args)
+    (declare (type function function)
+             (dynamic-extent args))
+    (with-thread-state-and-nesting (state)
+      (progn
+        (note-enter/block state name (first args))
+        (unwind-protect
+             (apply function args)
+          (note-leave/unblock state name (first args)))) ; TODO the object is not needed here
+      (apply function args))))
 
 ;;;
 
@@ -134,7 +162,7 @@
   '(sb-c::allocate-code-object
     sb-c::sap-read-var-integer))
 
-(defun record-name (name &key (recorder (curry #'recording-call/args name)))
+(defun record-name (name &key (recorder (make-recording-call/args name)))
   (when (member name *blacklist* :test #'eq)
     (return-from record-name))
   (sb-int:unencapsulate name 'recorder)
@@ -147,11 +175,9 @@
 
 (defmethod record ((thing t)
                    &key (arguments? nil)
-                        (recorder   (let ((recorder (if arguments?
-                                                        #'recording-call/args
-                                                        #'recording-call)))
-                                      (lambda (name)
-                                        (curry recorder name)))))
+                        (recorder   (if arguments?
+                                        #'make-recording-call/args
+                                        #'make-recording-call)))
   (map nil (lambda (name)
              (record-name name :recorder (funcall recorder name)))
        (thing->names thing)))
@@ -193,25 +219,26 @@
 ;;; Recording for implementation specific blocking calls
 
 (defvar *blockers*
-  '((sb-unix::nanosleep-float              . recording-call/blocking)
-    (sb-unix::nanosleep-double             . recording-call/blocking)
-    (sb-unix::nanosleep                    . recording-call/blocking)
+  '((sb-unix::nanosleep-float              . make-recording-call/blocking)
+    (sb-unix::nanosleep-double             . make-recording-call/blocking)
+    (sb-unix::nanosleep                    . make-recording-call/blocking)
 
-    (sb-ext:process-wait                   . recording-call/blocking)
-    (sb-impl::waitpid                      . recording-call/blocking)
-    (sb-impl::get-processes-status-changes . recording-call/args)
+    (sb-ext:process-wait                   . make-recording-call/blocking)
+    (sb-impl::waitpid                      . make-recording-call/blocking)
+    (sb-impl::get-processes-status-changes . make-recording-call/args)
 
-    ; (sb-thread:condition-wait              . recording-call/blocking)
-    ; (sb-thread:join-thread                 . recording-call/blocking)
+    (sb-thread:condition-wait              . make-recording-call/blocking)
+    (sb-thread:join-thread                 . make-recording-call/blocking)
 
-    ; (sb-thread:grab-mutex                  . recording-call/block)
-    ; (sb-thread:release-mutex               . recording-call/unblock)
-    ))
+    (sb-thread:grab-mutex                  . make-recording-call/block)
+    (sb-thread:release-mutex               . (make-recording-call/unblock sb-thread:grab-mutex))))
 
 (defmethod record ((thing (eql :blockers)) &key recorder)
   (declare (ignore recorder))
-  (loop :for (name . recorder) :in *blockers*
-        :do (record-name name :recorder (curry (fdefinition recorder) name)))) ; TODO symbol-function?
+  (loop :for (name . spec) :in *blockers*
+        :for (maker . extra-args) = (ensure-list spec)
+        :for recorder = (apply maker name extra-args)
+        :do (record-name name :recorder recorder))) ; TODO symbol-function?
 
 (defmethod unrecord ((thing (eql :blockers)))
   (map 'nil (compose #'unrecord-name #'car) *blockers*))
@@ -219,14 +246,14 @@
 ;;;
 
 (defun record-io ()
-  (record-name 'directory :recorder (curry #'recording-call/blocking 'directory))
-  (record-name 'open :recorder (curry #'recording-call/blocking 'open))
-  (record-name 'close :recorder (curry #'recording-call/blocking 'close))
-  (record-name 'sb-sys:wait-until-fd-usable :recorder (curry #'recording-call/blocking 'sb-sys:wait-until-fd-usable))
+  (record-name 'directory :recorder (make-recording-call/blocking 'directory))
+  (record-name 'open :recorder (make-recording-call/blocking 'open))
+  (record-name 'close :recorder (make-recording-call/blocking 'close))
+  (record-name 'sb-sys:wait-until-fd-usable :recorder (make-recording-call/blocking 'sb-sys:wait-until-fd-usable))
 
-  (record-name 'sb-bsd-sockets:get-host-by-name     :recorder (curry #'recording-call/blocking 'sb-bsd-sockets:get-host-by-name))
-  (record-name 'sb-bsd-sockets:get-host-by-address  :recorder (curry #'recording-call/blocking 'sb-bsd-sockets:get-host-by-address))
-  (record-name 'sb-bsd-sockets:get-protocol-by-name :recorder (curry #'recording-call/blocking 'sb-bsd-sockets:get-protocol-by-name))
+  (record-name 'sb-bsd-sockets:get-host-by-name     :recorder (make-recording-call/blocking 'sb-bsd-sockets:get-host-by-name))
+  (record-name 'sb-bsd-sockets:get-host-by-address  :recorder (make-recording-call/blocking 'sb-bsd-sockets:get-host-by-address))
+  (record-name 'sb-bsd-sockets:get-protocol-by-name :recorder (make-recording-call/blocking 'sb-bsd-sockets:get-protocol-by-name))
 
 
   #+no (dolist (name '(read-character read-character-no read-line read-sequence))))
