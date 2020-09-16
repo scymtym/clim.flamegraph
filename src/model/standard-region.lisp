@@ -109,6 +109,8 @@
   ())
 
 ;;; `wait-region'
+;;;
+;;; Waiting for a resource blocked by other threads.
 
 (defclass wait-region (standard-region)
   ((%object :initarg :object
@@ -125,4 +127,25 @@
 (defclass wait-region/root (wait-region
                             inner-region-mixin
                             root-region-mixin)
+  ())
+
+;;; `block-region'
+;;;
+;;; Blocking a resource so /other/ threads cannot use it.
+
+(defclass block-region (standard-region)
+  ((%object :initarg :object
+            :reader  object)))
+
+(defclass block-region/leaf (block-region)
+  ())
+
+(defclass block-region/inner (block-region
+                              inner-region-mixin)
+  ())
+
+;; TODO root without children
+(defclass block-region/root (block-region
+                             inner-region-mixin
+                             root-region-mixin)
   ())
