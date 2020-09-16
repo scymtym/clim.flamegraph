@@ -10,10 +10,6 @@
   (;; Parameters
    (%specification  :initarg  :specification
                     :reader   specification)
-   (%sample-rate    :initarg  :sample-rate
-                    :type     (real (0) 1)
-                    :reader   sample-rate
-                    :initform 1)
    (%depth-limit    :initarg  :depth-limit ; TODO rename to max-depth
                     :type     (or null positive-integer)
                     :reader   depth-limit
@@ -22,6 +18,20 @@
                     :type     non-negative-real ; TODO unit and type?
                     :reader   min-duration
                     :initform 0)
+   (%sample-rate    :initarg  :sample-rate
+                    :type     (real (0) 1)
+                    :reader   sample-rate
+                    :initform 1)
+   ;; TODO better name. this is max samples per thread
+   (%count-limit    :initarg  :count-limit
+                    :type     positive-integer
+                    :reader   count-limit
+                    :initform 1000000)
+   ;; TODO thread filter?
+   (%thread-test    :initarg  :thread-test
+                    :type     (or null function)
+                    :reader   thread-test
+                    :initform nil)
    ;; Runtime state
    (%sink           :accessor sink)
    (%thread         :accessor thread))
@@ -39,8 +49,15 @@
        (specification source))
 
   ;; Set up a recording state with the specified parameters.
-  (let ((depth-limit (or (depth-limit source) +unlimited+)))
-    (setf *recording-state* (make-recording-state depth-limit)))
+  (let ((depth-limit  (or (depth-limit source) +unlimited+))
+        (min-duration (min-duration source))
+        (sample-rate  (sample-rate source))
+        (thread-test  (thread-test source)))
+    (setf *recording-state* (make-recording-state :depth-limit    depth-limit
+                                                  :duration-limit min-duration
+                                                  :sample-rate    sample-rate
+                                                  :count-limit    1000000
+                                                  :thread-test    thread-test)))
 
   ;; Start a worker thread and tell the recorder about it.
   (setf (sink source) sink)

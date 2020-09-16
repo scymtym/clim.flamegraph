@@ -36,11 +36,13 @@
 (defun process-state (sink source state aggregation-state)
   (let ((chunk (make-array 128 :adjustable t :fill-pointer 0)))
     (maphash (lambda (thread thread-state)
-               (loop :with  t-a-s = (ensure-thread-aggregation-state aggregation-state thread)
-                     :for   event = (maybe-consume-event thread-state)
-                     :while event
-                     :do    (when-let ((result (process-event event t-a-s)))
-                              (vector-push-extend result chunk))))
+               (unless (eq thread-state :ignore)
+                 (loop :with  t-a-s = (ensure-thread-aggregation-state
+                                       aggregation-state thread)
+                       :for   event = (maybe-consume-event thread-state)
+                       :while event
+                       :do    (when-let ((result (process-event event t-a-s)))
+                                (vector-push-extend result chunk)))))
              (recording-state-thread-states state))
     (recording:add-chunk source sink chunk)))
 

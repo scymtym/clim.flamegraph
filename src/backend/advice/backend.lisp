@@ -69,14 +69,14 @@
 
 (defstruct (thread-state ; TODO rename to something-buffer
             (:constructor make-thread-state
-                (depth-limit #+no duration-limit sample-rate
+                (depth-limit duration-limit sample-rate count-limit
                  &aux (sample-pattern (when (and sample-rate (/= sample-rate 1))
                                         (make-sample-pattern sample-rate 1024)))))
             (:copier nil)
             (:predicate nil))
   ;; Parameters
   (depth-limit    0                        :type (unsigned-byte 62))
-  ; (duration-limit 0                        :type (unsigned-byte 62)) ; TODO time type
+  (duration-limit 0                        :type (unsigned-byte 62)) ; TODO time type
   (sample-pattern nil                      :type (or null sample-pattern))
   (count-limit    1000000                  :type (unsigned-byte 62))
   ;; Runtime state
@@ -115,11 +115,13 @@
     (when (< read-head write-head)
       (consume-event thread-state))))
 
-(defstruct (recording-state
-            (:constructor make-recording-state (depth-limit)))
+(defstruct recording-state
   ;; Parameters
   (depth-limit    0                                            :type (unsigned-byte 62))
+  (duration-limit 0                                            :type (unsigned-byte 62)) ; TODO time type
   (sample-rate    1                                            :type (real (0) 1))
+  (count-limit    1000000                                      :type (unsigned-byte 62))
+  (thread-test    nil                                          :type (or null function))
   ;; Runtime state
   (recording?     nil                                          :type (or (eql :terminating) boolean))
   (thread-states  (make-hash-table :test #'eq :synchronized t) :type hash-table :read-only t))
@@ -127,13 +129,17 @@
 (declaim (inline ensure-thread-state))
 (defun ensure-thread-state (recording-state
                             &optional (thread (bt:current-thread)))
-
   (let ((table (recording-state-thread-states recording-state)))
-    (ensure-gethash thread table
-                    (make-thread-state
-                     (recording-state-depth-limit recording-state)
-                                        ; (recording-state-duration-limit recording-state)
-                     (recording-state-sample-rate recording-state)))))
+    (ensure-gethash
+     thread table
+     (let ((test (recording-state-thread-test recording-state)))
+       (if (or (null test) (funcall test thread))
+           (make-thread-state
+            (recording-state-depth-limit recording-state)
+            (recording-state-duration-limit recording-state)
+            (recording-state-sample-rate recording-state)
+            (recording-state-count-limit recording-state))
+           :ignore)))))
 
 ;;; Macros
 
@@ -176,15 +182,20 @@
                     (,normal-thunk))))
        ; (declare (inline ,recording-thunk ,normal-thunk ,with-state-thunk))
        (with-recording-state (,recording-state)
-         (if-let ((,state-var *thread-state*))
-           (,with-state-thunk ,state-var)
-           (let* ((,state-var     (ensure-thread-state
-                                   ,recording-state ,@(when thread `(,thread))))
-                  (*thread-state* ,state-var))
-             (if ,state-var
-                 (,with-state-thunk ,state-var)
-                 (,normal-thunk))
-             #+no (,with-state-thunk ,state-var)))
+         (let ((,state-var *thread-state*))
+           (case ,state-var
+             ((nil)
+              (let* ((,state-var     (ensure-thread-state
+                                      ,recording-state ,@(when thread `(,thread))))
+                     (*thread-state* ,state-var))
+                (if (eq ,state-var :ignore)
+                    (,normal-thunk)
+                    (,with-state-thunk ,state-var))
+                #+no (,with-state-thunk ,state-var)))
+             (:ignore
+              (,normal-thunk))
+             (t
+              (,with-state-thunk ,state-var))))
          (,normal-thunk)))))
 
 (defvar *in* nil)
@@ -196,7 +207,6 @@
   (with-gensyms (old-depth)
     `(if *in*
          (progn
-           ; (format t "recursive ~A~%" *context*)
            (sb-ext:atomic-incf (car *dropped-count*))
            (let ((*in* nil))
              ,normal-body))
@@ -204,7 +214,6 @@
            (with-thread-state (,state-var ,thread)
              (let ((,old-depth (thread-state-depth ,state-var)))
                (setf (thread-state-depth ,state-var) (1+ ,old-depth))
-               ; (format t "depth ~A ~A~%" *context* (1+ ,old-depth))
                (multiple-value-prog1
                    ,recording-body
                  (setf (thread-state-depth ,state-var) ,old-depth))) ; TODO what about non-local exits?
