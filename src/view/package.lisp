@@ -1,6 +1,6 @@
 ;;;; package.lisp --- Package definition for the view module.
 ;;;;
-;;;; Copyright (C) 2019 Jan Moringen
+;;;; Copyright (C) 2019, 2020 Jan Moringen
 ;;;;
 ;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
 
@@ -14,6 +14,15 @@
 
    (#:model #:clim.flamegraph.model))
 
+  ;; Utilities
   (:export
    #:package-color
-   #:symbol-color))
+   #:symbol-color)
+
+  ;; Presentation types
+  (:export
+   #:name
+
+   #:hit-count
+   #:call-statistics
+   #:called-function))
