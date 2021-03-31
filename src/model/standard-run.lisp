@@ -1,6 +1,6 @@
 ;;;; standard-run.lisp --- Default implementations of run, trace, etc. protocols
 ;;;;
-;;;; Copyright (C) 2019, 2020 Jan Moringen
+;;;; Copyright (C) 2019, 2020, 2021 Jan Moringen
 ;;;;
 ;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
 
@@ -8,14 +8,18 @@
 
 ;;; `standard-run'
 
-(defclass standard-run (temporal-interval-mixin
+(defclass standard-run (name-mixin
+                        temporal-interval-mixin
                         print-items:print-items-mixin)
-  ((%threads   :reader  threads
-               :writer  (setf %threads))
-   (%functions :reader  functions
-               :writer  (setf %functions))
-   (%traces    :reader  traces
-               :writer  (setf %traces)))) ; TODO call this events? or separate events slot?
+  ((%name      :writer   (setf name))
+   (%threads   :reader   threads
+               :writer   (setf %threads))
+   (%functions :reader   functions
+               :writer   (setf %functions))
+   (%traces    :reader   traces
+               :writer   (setf %traces))) ; TODO call this events? or separate events slot?
+  (:default-initargs
+   :name nil))
 
 (defun temporal-bounds-in-traces (traces)
   (let ((start most-positive-fixnum)
