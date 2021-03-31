@@ -34,16 +34,19 @@
               (sleep .01))) ; TODO
 
 (defun process-state (sink source state aggregation-state)
-  (let ((chunk (make-array 128 :adjustable t :fill-pointer 0)))
-    (maphash (lambda (thread thread-state)
-               (unless (eq thread-state :ignore)
-                 (loop :with  t-a-s = (ensure-thread-aggregation-state
-                                       aggregation-state thread)
-                       :for   event = (maybe-consume-event thread-state)
-                       :while event
-                       :do    (when-let ((result (process-event event t-a-s)))
-                                (vector-push-extend result chunk)))))
-             (recording-state-thread-states state))
+  (let ((chunk         (make-array 128 :adjustable t :fill-pointer 0))
+        (thread-states (recording-state-thread-states state)))
+    (#+sbcl sb-ext:with-locked-hash-table (thread-states)
+     #-sbcl progn
+     (maphash (lambda (thread thread-state)
+                (unless (eq thread-state :ignore)
+                  (loop :with  t-a-s = (ensure-thread-aggregation-state
+                                        aggregation-state thread)
+                        :for   event = (maybe-consume-event thread-state)
+                        :while event
+                        :do    (when-let ((result (process-event event t-a-s)))
+                                 (vector-push-extend result chunk)))))
+              thread-states))
     (recording:add-chunk source sink chunk)))
 
 ;;; Ordinary calls with and without values (nested within one thread)
