@@ -34,10 +34,11 @@
 
 (defstruct (context
             (:constructor make-context
-                (&key (depth-limit 1024)
+                (&key (depth-limit 1024) thread-test
                  &aux (traces (make-trace-ring-buffer :depth-limit depth-limit)))))
   ;; Configuration
   (depth-limit 0   :type array-index             :read-only t)
+  (thread-test nil :type (or null function)      :read-only t)
   ;; Ring buffer
   (traces      nil :type trace-ring-buffer-array :read-only t)
   (read-head   0   :type array-index)

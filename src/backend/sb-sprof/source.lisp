@@ -28,9 +28,13 @@
                        "Maximum recording call stack depth. Stack
                         frames beyond the limit will not be present in
                         the recorded trace.")
-   (%filter            :initarg  :filter
-                       :type     (or null function)
-                       :reader   filter
+   (%thread-test       :initarg  :thread-test
+                       :type     (or null symbol function) ; TODO function-designator
+                       :reader   thread-test
+                       :initform nil)
+   (%name-test         :initarg  :name-test
+                       :type     (or null symbol function) ; TODO function-designator
+                       :reader   name-test
                        :initform nil)
    ;; Runtime state
    (%sink              :accessor sink
@@ -47,7 +51,10 @@
 (defmethod recording:setup ((source source) (sink t))
   ;; Prepare a context and a worker which consumes raw traces from the
   ;; trace ringbuffer of the context. The context is global.
-  (setf *context* (make-context :depth-limit (trace-depth-limit source)))
+  (let ((thread-test (when-let ((test (thread-test source)))
+                       (ensure-function test))))
+    (setf *context* (make-context :depth-limit (trace-depth-limit source)
+                                  :thread-test thread-test)))
   (setf (sink   source) sink
         (thread source) (bt:make-thread (curry #'work source sink)
                                         :name "sprof source worker"))
@@ -82,18 +89,18 @@
 ;;; to the proper trace representation.
 
 (defun work (source sink)
-  (loop :with filter = (when-let ((filter (filter source)))
-                         (ensure-function filter))
+  (loop :with name-test = (when-let ((test (name-test source)))
+                            (ensure-function test))
         :for context = *context*        ; TODO termination
         :while context
         :do (loop :for trace-buffer = (maybe-consume-trace context)
                   :while trace-buffer
-                  :collect (buffer->trace trace-buffer filter) :into traces
+                  :collect (buffer->trace trace-buffer name-test) :into traces
                   :finally (recording:add-chunk source sink traces))
             (sleep .01)))
 
-(defun buffer->trace (buffer filter)
-  (declare (type (or null function) filter))
+(defun buffer->trace (buffer name-test)
+  (declare (type (or null function) name-test))
   (make-instance 'model::standard-trace
                  :thread  (trace-buffer-thread buffer)
                  :time    (trace-buffer-time buffer)
@@ -101,8 +108,8 @@
                             (loop :with samples = (trace-buffer-samples buffer)
                                   :for i :downfrom (* 2 (1- (trace-buffer-count buffer))) :to 0 :by 2
                                   :for name = (info->name (aref samples i))
-                                  :when (or (null filter)
-                                            (funcall filter name))
+                                  :when (or (null name-test)
+                                            (funcall name-test name))
                                   :collect (make-instance 'model::standard-sample :name name)))))
 
 (defun info->name (info)
@@ -201,8 +208,9 @@
            (type sb-alien:system-area-pointer scp))
   (when-let* ((context *context*)
               (thread  sb-thread:*current-thread*))
-    (when (and t
-               #+todo (profiled-thread-p self)
+    (when (and (if-let ((test (context-thread-test context)))
+                 (funcall test thread)
+                 t)
                (not recording:*in-critical-recording-code?*))
       (let ((recording:*in-critical-recording-code?* t))
         (sb-thread::with-system-mutex (sb-sprof::*profiler-lock* :without-gcing t) ; TODO is the lock needed? is without-gcing needed?
