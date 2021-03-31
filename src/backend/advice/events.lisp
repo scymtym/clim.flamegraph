@@ -1,10 +1,17 @@
 ;;;; events.lisp --- Call-like events this source can record.
 ;;;;
-;;;; Copyright (C) 2019, 2020 Jan Moringen
+;;;; Copyright (C) 2019, 2020, 2021 Jan Moringen
 ;;;;
 ;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
 
 (cl:in-package #:clim.flamegraph.backend.advice)
+
+;;; HACK Suppress deadlock detection false positives
+
+(sb-ext:without-package-locks
+  (defun sb-thread::check-deadlock ()))
+
+;;;
 
 (defmacro recording-event ((event-var state kind name) &body body)
   (once-only (state)
