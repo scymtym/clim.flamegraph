@@ -1,7 +1,6 @@
 (defsystem "clim.flamegraph.view"
   :version     (:read-file-form "version-string.sexp")
   :depends-on  ("alexandria"
-                "text.orders-of-magnitude"
 
                 "mcclim"
 

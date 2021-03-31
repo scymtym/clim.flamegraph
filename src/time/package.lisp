@@ -3,7 +3,10 @@
    #:cl)
 
   (:export
-   #:real-time))
+   #:real-time)
+
+  (:export
+   #:print-human-readable-duration))
 
 (cl:in-package #:clim.flamegraph.time)
 

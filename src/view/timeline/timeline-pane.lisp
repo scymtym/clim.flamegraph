@@ -81,7 +81,7 @@
           (loop :for i :from 0
                 :for time :from (- start-time start-time) :to (+ (- end-time start-time) #+no (* 100 (/ scale))) :by (* 100 (/ scale)) ; One tick every 100 pixels
                 :for label = (with-output-to-string (stream)
-                               (text.orders-of-magnitude:print-human-readable-duration
+                               (clim.flamegraph.time:print-human-readable-duration
                                 stream time ; (+ start-time time)
                                 ))
                 :do (clim:draw-line* pane time (- tick-height) time tick-height)

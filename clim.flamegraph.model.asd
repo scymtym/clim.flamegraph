@@ -7,10 +7,12 @@
   :components  ((:module     "time"
                  :pathname   "src/time"
                  :serial     t
-                 :components ((:file       "package")))
+                 :components ((:file       "package")
+                              (:file       "human-readable")))
 
                 (:module     "model"
                  :pathname   "src/model"
+                 :depends-on ("time")
                  :serial     t
                  :components ((:file       "package")
                               (:file       "protocol")

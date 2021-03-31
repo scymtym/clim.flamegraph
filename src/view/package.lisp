@@ -1,6 +1,6 @@
 ;;;; package.lisp --- Package definition for the view module.
 ;;;;
-;;;; Copyright (C) 2019, 2020 Jan Moringen
+;;;; Copyright (C) 2019, 2020, 2021 Jan Moringen
 ;;;;
 ;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
 
@@ -10,8 +10,7 @@
    #:alexandria)
 
   (:local-nicknames
-   (#:om    #:text.orders-of-magnitude)
-
+   (#:time  #:clim.flamegraph.time)
    (#:model #:clim.flamegraph.model))
 
   ;; Utilities

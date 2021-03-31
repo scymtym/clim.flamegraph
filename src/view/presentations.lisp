@@ -79,7 +79,7 @@
         (clim:formatting-cell (stream)
           (write-string "Total time" stream))
         (clim:formatting-cell (stream :align-x :right)
-          (om:print-human-readable-duration stream (model::total-run-time object)))))
+          (time:print-human-readable-duration stream (model::total-run-time object)))))
     (setf (clim:stream-cursor-position stream) (values x (+ (nth-value 1 (clim:stream-cursor-position stream)) 8))))
   (format stream "Called from threads~%")
   (clim:format-items (model::calling-threads object)

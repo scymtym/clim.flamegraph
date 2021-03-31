@@ -1,6 +1,6 @@
 ;;;; standard-region.lisp ---
 ;;;;
-;;;; Copyright (C) 2019, 2020 Jan Moringen
+;;;; Copyright (C) 2019, 2020, 2021 Jan Moringen
 ;;;;
 ;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
 
@@ -54,11 +54,6 @@
                            temporal-interval-mixin
                            print-items:print-items-mixin)
   ())
-
-#+maybe (defmethod print-items:print-items append ((object region))
-  (let+ (((&accessors-r/o name duration) object))
-    `((:name        ,name)
-      (:duration    ,duration " ~/text.orders-of-magnitude:print-human-readable-duration/" ((:after :name))))))
 
 (defmethod start-time :around ((object standard-region)) ; TODO temp
   (/ (call-next-method) 1000000))

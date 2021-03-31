@@ -1,6 +1,6 @@
 ;;;; mixins.lisp --- Mixin classes provided by the model module.
 ;;;;
-;;;; Copyright (C) 2019, 2020 Jan Moringen
+;;;; Copyright (C) 2019, 2020, 2021 Jan Moringen
 ;;;;
 ;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
 
@@ -38,4 +38,4 @@
                 :initform nil)))
 
 (defmethod print-items:print-items append ((object temporal-interval-mixin))
-  `((:duration ,(duration* object) " ~,6F" #+later "~/text.orders-of-magnitude:print-human-readable-duration/" ((:after :name)))))
+  `((:duration ,(duration* object) "~/clim.flamegraph.time:print-human-readable-duration/" ((:after :name)))))
