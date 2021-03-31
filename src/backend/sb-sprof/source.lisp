@@ -54,8 +54,7 @@
   ;; Install a signal handler that will be invoked periodically via a
   ;; timer and the "profile" signal and will produce and push raw
   ;; traces into the ringbuffer of the context.
-  (sb-sys:enable-interrupt
-   sb-unix:sigprof #'sigprof-handler/cpu :synchronous t))
+  (sb-sys:enable-interrupt sb-unix:sigprof #'sigprof-handler/cpu))
 
 (defmethod recording:start ((source source) (sink t))
   ;; Configure a system timer to trigger our handler according to the
@@ -132,6 +131,8 @@
          (values (clean-name name) component)))
       (sb-di::debug-fun
        (clean-name (sb-di::debug-fun-name info)))
+      (symbol
+       (symbol-name info))
       (t
        (coerce info 'string)))))
 
@@ -142,52 +143,55 @@
 
 (defun collect-stacktrace (scp depth-limit buffer)
   (declare (optimize speed))
-  (sb-alien:with-alien ((scp (* sb-sys:os-context-t) :local scp))
-    (let* ((pc-ptr (sb-vm:context-pc scp))
-           (fp     (sb-vm::context-register scp #.sb-vm::ebp-offset)))
-      ;; Foreign code might not have a useful frame pointer in
-      ;; ebp/rbp, so make sure it looks reasonable before
-      ;; walking the stack
-      (unless (sb-di::control-stack-pointer-valid-p (sb-sys:int-sap fp))
-        (return-from collect-stacktrace nil))
-      (let ((fp (sb-sys:int-sap fp))    ; TODO put into loop?
-            (ok t))
-        (declare (type sb-alien:system-area-pointer fp pc-ptr)
-                 ;; FIXME: How annoying. The XC doesn't store enough
-                 ;; type information about SB-DI::X86-CALL-CONTEXT,
-                 ;; even if we declaim the ftype explicitly in
-                 ;; src/code/debug-int. And for some reason that type
-                 ;; information is needed for the inlined version to
-                 ;; be compiled without boxing the returned saps. So
-                 ;; we declare the correct ftype here manually, even
-                 ;; if the compiler should be able to deduce this
-                 ;; exact same information.
-                 #+no (ftype (function (sb-alien:system-area-pointer)
-                                       (values (member nil t)
-                                               sb-alien:system-area-pointer
-                                               sb-alien:system-area-pointer))
-                             sb-di::x86-call-context))
-        (loop :with samples = (trace-buffer-samples buffer)
-              :for frame :of-type array-index :below depth-limit
-              :for i :of-type fixnum :from 0 :by 2
-              :for (info pc-or-offset) = (multiple-value-list
-                                          (sb-sprof::debug-info pc-ptr))
-              :do (setf (aref samples (+ i 0)) info
-                        (aref samples (+ i 1)) pc-or-offset)
-              :do (setf (values ok pc-ptr fp)
-                        (sb-di::x86-call-context fp))
-              :when (not ok)
-              :do (setf (trace-buffer-count buffer) frame)
-                  ;; If we fail to walk the stack beyond the initial
-                  ;; frame, there is likely something wrong. Undo
-                  ;; the trace start marker and the one sample we
-                  ;; already recorded.
-                  (when (zerop frame)
-                    #+todo (decf (samples-index samples)
-                                 (+ sb-sprof::+elements-per-trace-start+
-                                    (* sb-sprof::+elements-per-sample+ (1+ i)))))
-                  (return)
-              :finally (setf (trace-buffer-count buffer) frame))))))
+  (sb-sys:with-code-pages-pinned (:dynamic)
+    (sb-alien:with-alien ((scp (* sb-sys:os-context-t) :local scp))
+      (let* ((pc-ptr (sb-vm:context-pc scp))
+             (fp     (sb-vm::context-register
+                      scp #+x86-64 #.sb-vm::rbp-offset
+                          #+x86 #.sb-vm::ebp-offset)))
+        ;; Foreign code might not have a useful frame pointer in
+        ;; ebp/rbp, so make sure it looks reasonable before walking
+        ;; the stack
+        (unless (sb-di::control-stack-pointer-valid-p (sb-sys:int-sap fp))
+          (return-from collect-stacktrace nil))
+        (let ((fp (sb-sys:int-sap fp))   ; TODO put into loop?
+              (ok t))
+          (declare (type sb-alien:system-area-pointer fp pc-ptr)
+                   ;; FIXME: How annoying. The XC doesn't store enough
+                   ;; type information about SB-DI::X86-CALL-CONTEXT,
+                   ;; even if we declaim the ftype explicitly in
+                   ;; src/code/debug-int. And for some reason that type
+                   ;; information is needed for the inlined version to
+                   ;; be compiled without boxing the returned saps. So
+                   ;; we declare the correct ftype here manually, even
+                   ;; if the compiler should be able to deduce this
+                   ;; exact same information.
+                   #+no (ftype (function (sb-alien:system-area-pointer)
+                                         (values (member nil t)
+                                                 sb-alien:system-area-pointer
+                                                 sb-alien:system-area-pointer))
+                               sb-di::x86-call-context))
+          (loop :with samples = (trace-buffer-samples buffer)
+                :for frame :of-type array-index :below depth-limit
+                :for i :of-type fixnum :from 0 :by 2
+                :for (info pc-or-offset) = (multiple-value-list
+                                            (sb-sprof::debug-info pc-ptr))
+                :do (setf (aref samples (+ i 0)) info
+                          (aref samples (+ i 1)) pc-or-offset)
+                :do (setf (values ok pc-ptr fp)
+                          (sb-di::x86-call-context fp))
+                :when (not ok)
+                :do (setf (trace-buffer-count buffer) frame)
+                    ;; If we fail to walk the stack beyond the initial
+                    ;; frame, there is likely something wrong. Undo
+                    ;; the trace start marker and the one sample we
+                    ;; already recorded.
+                    (when (zerop frame)
+                      #+TODO (decf (samples-index samples)
+                                   (+ sb-sprof::+elements-per-trace-start+
+                                      (* sb-sprof::+elements-per-sample+ (1+ i)))))
+                    (return)
+                :finally (setf (trace-buffer-count buffer) frame)))))))
 
 (defun sigprof-handler/cpu (signal code scp)
   (declare (ignore signal code)
