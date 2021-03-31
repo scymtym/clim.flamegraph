@@ -1,4 +1,4 @@
-#+TITLE:    The clim.flamegraph system
+#+TITLE:    The clim.flamegraph Application
 #+AUTHOR:   Jan Moringen
 #+EMAIL:    jmoringe@techfak.uni-bielefeld.de
 #+LANGUAGE: en
@@ -8,19 +8,48 @@
 
 * Introduction
 
-  The ~clim.flamegraph~ system is a proof of concept application for
-  [[https://common-lisp.net/project/mcclim/][McCLIM]] that displays profiling data recorded uses [[http://sbcl.org][SBCL]]'s ~sb-sprof~
-  contrib module as a flamegraph, i.e. a visualization of the relative
-  frequencies of function call chains.
+  This application is a work in progress. It allows capturing
+  performance-related information from different sources and
+  presenting the collected information graphically.
 
-  *This system uses an interface that has been introduced in SBCL
-  1.4.6, so at least that SBCL version is required*.
+  *Important notes*
 
-  *SBCL 1.4.13 includes an important performance improvement for
-  sorting profiling results. If redisplay performance is not good
-  enough, try using that SBCL version.*
+  + *For the time being, please use this application with the McCLIM
+    version at https://github.com/scymtym/mcclim ("master" branch).*
+
+  + *For the time being, only SBCL and only certain versions are
+    supported.*
 
 * TODO Tutorial
+
+  1. Load the application with
+
+     #+BEGIN_SRC lisp
+       (asdf:load-system :clim.flamegraph.sbcl-defaults)
+     #+END_SRC
+
+  2. Start the application with
+
+     #+BEGIN_SRC lisp
+       (clim.flamegraph.application:launch)
+     #+END_SRC
+
+  Then either record performance information using the graphical
+  application or see [[file:examples/trace-recording.lisp]] for
+  programmatic recording.
+
+  When using the graphical application
+
+  1. Add sources by typing the =Add Source= command or click the
+     "Recording" configuration.
+
+  2. Some sources only consider explicitly configured threads. To
+     configure threads, click on elements of the thread list. The
+     configuration view will indicate which sources are restricted to
+     the selected threads.
+
+  3. Use the "Start Recording" and "Stop Recording" buttons to create
+     a [[glossary:run][run]].
 
 * STARTED Glossary
 
