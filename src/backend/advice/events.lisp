@@ -218,12 +218,23 @@
 
 ;;; Recording for implementation specific blocking calls
 
+(eval-when (:compile-toplevel :execute)
+  (when (and (find-symbol "NANOSLEEP-FLOAT"  "SB-UNIX")
+             (find-symbol "NANOSLEEP-DOUBLE" "SB-UNIX")
+             (find-symbol "NANOSLEEP"        "SB-UNIX")
+             (find-symbol "WAITPID"          "SB-IMPL"))
+    (pushnew 'unix-nanosleep *features*)))
+
 (defvar *blockers*
-  '((sb-unix::nanosleep-float              . make-recording-call/blocking)
+  '(#+clim.flamegraph.backend.advice::unix-nanosleep
+    (sb-unix::nanosleep-float              . make-recording-call/blocking)
+    #+clim.flamegraph.backend.advice::unix-nanosleep
     (sb-unix::nanosleep-double             . make-recording-call/blocking)
+    #+clim.flamegraph.backend.advice::unix-nanosleep
     (sb-unix::nanosleep                    . make-recording-call/blocking)
 
     (sb-ext:process-wait                   . make-recording-call/blocking)
+    #+clim.flamegraph.backend.advice::unix-nanosleep
     (sb-impl::waitpid                      . make-recording-call/blocking)
     (sb-impl::get-processes-status-changes . make-recording-call/args)
 
