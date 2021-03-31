@@ -70,7 +70,8 @@
           (note-enter/args state name args))
         (unwind-protect
              (sb-sys:with-interrupts
-               (apply function args))
+               (let ((*in* nil))
+                 (apply function args)))
           (let ((*recording-state* nil)
                 (*thread-state*    nil))
             (note-leave state name))))
