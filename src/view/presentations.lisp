@@ -1,6 +1,6 @@
 ;;;; presentations.lisp --- Presentations for standard model objects.
 ;;;;
-;;;; Copyright (C) 2019, 2020 Jan Moringen
+;;;; Copyright (C) 2019, 2020, 2021 Jan Moringen
 ;;;;
 ;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
 
@@ -51,8 +51,7 @@
   (when total-hit-count
     (let ((ratio (min (/ object total-hit-count) 1))) ; TODO hack
       (clim:with-drawing-options (stream :text-size :smaller :ink (clim:make-rgb-color ratio 0 0))
-        #-mezzano (format stream " (~,2,2F %)" ratio)
-        #+mezzano (format stream " (~F %)" (float (* 100 ratio) 1.0))))))
+        (format stream " (~,2,2F %)" ratio)))))
 
 (clim:define-presentation-type call-statistics (&key (total-hit-count nil))
   :inherit-from '(t))

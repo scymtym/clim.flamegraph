@@ -1,6 +1,6 @@
 ;;;; timeline-pane.lisp --- .
 ;;;;
-;;;; Copyright (C) 2019, 2020 Jan Moringen
+;;;; Copyright (C) 2019, 2020, 2021 Jan Moringen
 ;;;;
 ;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
 
@@ -84,7 +84,6 @@
                                (text.orders-of-magnitude:print-human-readable-duration
                                 stream time ; (+ start-time time)
                                 ))
-                ; :do (format *trace-output* "~A ~A~%" time label) (force-output *trace-output*)
                 :do (clim:draw-line* pane time (- tick-height) time tick-height)
                     (clim:draw-text* pane label time 0
                                      :align-x (if (zerop i) :left :center)
@@ -122,7 +121,7 @@
                                (elements model))))
     (clim:present traces 'traces :stream pane))
 
-  (let ((height 80))
+  (let ((height 40))
    (clim:with-translation (pane 0 height)
      (clim:with-scaling (pane 1 -1)
        (let* ((events   (remove-if-not (alexandria:of-type 'clim.flamegraph.model::standard-event)
@@ -179,7 +178,7 @@
   (declare (ignore force-p))
   (clim:with-translation (pane 8 8)     ; TODO use padding, border etc
     (clim:with-drawing-options (pane :text-size :smaller)
-      #-mezzano (display-model pane (model pane)))))
+      (display-model pane (model pane)))))
 
 (defmethod clim:replay-output-record :around ((record clim.flamegraph.view.region::standard-region-output-record)
                                               (stream timeline-pane)
