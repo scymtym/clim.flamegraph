@@ -123,14 +123,14 @@
                name)))
     (typecase info
       (sb-kernel::code-component
-       (let ((start (sb-sprof::code-bounds info)))
+       (let ((start (sb-sys:sap-int (sb-kernel:code-instructions info))))
          (values (or (sb-disassem::find-assembler-routine start)
                      (format nil "~a" info))
                  info)))
       (sb-di::compiled-debug-fun
        (let* ((name      (sb-di::debug-fun-name info))
               (component (sb-di::compiled-debug-fun-component info))
-              (start-pc  (sb-sprof::code-start component)))
+              (start-pc  (sb-sys:sap-int (sb-kernel:code-instructions component))))
          ;; Call graphs are mostly useless unless we somehow
          ;; distinguish a gazillion different (LAMBDA ())'s.
          (when (equal name '(lambda ()))
@@ -147,6 +147,37 @@
 ;;;
 ;;; This code was initially based on the signal handler code in SBCL's
 ;;; sb-sprof contrib but has somewhat diverged by now.
+
+(defun debug-info (pc)
+  (declare (type sb-sys:system-area-pointer pc)
+           (sb-ext:muffle-conditions sb-ext:compiler-note))
+  (let ((code (sb-di::code-header-from-pc pc))
+        (pc-int (sb-sys:sap-int pc)))
+    (cond ((not code)
+           (let ((name (sb-sys:sap-foreign-symbol pc)))
+             (if name
+                 (values (format nil "foreign function ~a" name)
+                         pc-int :foreign)
+                 (values nil pc-int :foreign))))
+          ((eq code sb-fasl:*assembler-routines*)
+           (values (sb-disassem::find-assembler-routine pc-int)
+                   pc-int :asm-routine))
+          (t
+           (let* (;; Give up if we land in the 2 or 3 instructions of a
+                  ;; code component sans simple-fun that is not an asm routine.
+                  ;; While it's conceivable that this could be improved,
+                  ;; the problem will be different or nonexistent after
+                  ;; funcallable-instances each contain their own trampoline.
+                  (pc-offset (sb-sys:sap- (sb-sys:int-sap pc-int) (sb-kernel:code-instructions code)))
+                  (df (sb-di::debug-fun-from-pc code pc-offset)))
+             (cond ((typep df 'sb-di::bogus-debug-fun)
+                    (values code pc-int nil))
+                   (df
+                    ;; The code component might be moved by the GC. Store
+                    ;; a PC offset, and reconstruct the data in SAMPLE-PC
+                    (values df pc-offset nil))
+                   (t
+                    (values nil 0 nil))))))))
 
 (defun collect-stacktrace (scp depth-limit buffer)
   (declare (optimize speed))
@@ -182,7 +213,7 @@
                 :for frame :of-type array-index :below depth-limit
                 :for i :of-type fixnum :from 0 :by 2
                 :for (info pc-or-offset) = (multiple-value-list
-                                            (sb-sprof::debug-info pc-ptr))
+                                            (debug-info pc-ptr))
                 :do (setf (aref samples (+ i 0)) info
                           (aref samples (+ i 1)) pc-or-offset)
                 :do (setf (values ok pc-ptr fp)
@@ -202,7 +233,7 @@
 
 (defun sigprof-handler/cpu (signal code scp)
   (declare (ignore signal code)
-           (optimize speed (space 0))
+           (optimize speed)
            (sb-ext:disable-package-locks sb-di::x86-call-context)
            (sb-ext:muffle-conditions sb-ext:compiler-note)
            (type sb-alien:system-area-pointer scp))
@@ -213,7 +244,7 @@
                  t)
                (not recording:*in-critical-recording-code?*))
       (let ((recording:*in-critical-recording-code?* t))
-        (sb-thread::with-system-mutex (sb-sprof::*profiler-lock* :without-gcing t) ; TODO is the lock needed? is without-gcing needed?
+        (sb-sys:without-gcing
           ;; Bind `*print-circle*' to avoid touching the circularity
           ;; hash-table when (re-)entering the pretty printer.
           (let ((*print-circle* nil))
