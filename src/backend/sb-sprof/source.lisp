@@ -1,6 +1,6 @@
 ;;;; source.lisp --- Source implementation provided by the backend.sb-sprof module.
 ;;;;
-;;;; Copyright (C) 2019, 2020 Jan Moringen
+;;;; Copyright (C) 2019, 2020, 2021 Jan Moringen
 ;;;;
 ;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
 
@@ -61,7 +61,7 @@
   ;; Install a signal handler that will be invoked periodically via a
   ;; timer and the "profile" signal and will produce and push raw
   ;; traces into the ringbuffer of the context.
-  (sb-sys:enable-interrupt sb-unix:sigprof #'sigprof-handler/cpu))
+  (sb-sys:enable-interrupt sb-unix:sigvtalrm #'sigprof-handler/cpu))
 
 (defmethod recording:start ((source source) (sink t))
   ;; Configure a system timer to trigger our handler according to the
@@ -69,7 +69,7 @@
   (multiple-value-bind (seconds fractional-seconds)
       (truncate (sample-interval source))
     (let ((microseconds (truncate (* fractional-seconds 1000000))))
-      (sb-unix:unix-setitimer :profile
+      (sb-unix:unix-setitimer :virtual
                               seconds microseconds
                               seconds microseconds))))
 
@@ -77,7 +77,7 @@
   (sb-unix:unix-setitimer :profile 0 0 0 0))
 
 (defmethod recording:teardown ((source source) (sink t))
-  ;; (sb-sys:enable-interrupt sb-unix:sigprof :default) ; TODO
+  ;; (sb-sys:enable-interrupt sb-unix:sigvtalrm :default) ; TODO
 
   (setf *context* nil) ; TODO put a condition variable into the context
   (bt:join-thread (thread source)))
@@ -110,7 +110,7 @@
                                   :for name = (info->name (aref samples i))
                                   :when (or (null name-test)
                                             (funcall name-test name))
-                                  :collect (make-instance 'model::standard-sample :name name)))))
+                                    :collect (make-instance 'model::standard-sample :name name)))))
 
 (defun info->name (info)
   (flet ((clean-name (name)
