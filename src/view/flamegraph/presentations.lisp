@@ -1,6 +1,6 @@
 ;;;; presentations.lisp --- Presentation types used in the view.flamegraph module.
 ;;;;
-;;;; Copyright (C) 2017, 2018, 2019, 2020 Jan Moringen
+;;;; Copyright (C) 2017, 2018, 2019, 2020, 2021 Jan Moringen
 ;;;;
 ;;;; Author: Jan Moringen <jmoringe@techfak.uni-bielefeld.de>
 
@@ -39,7 +39,7 @@
    ;; Cache for graphical properties
    (%text-style      :initarg  :text-style
                      :reader   text-style
-                     :initform (clim:make-text-style :fix nil :small))
+                     :initform (clim:make-text-style :fix nil :smaller))
    (%char-size       :accessor %char-size
                      :initform nil)))
 
@@ -102,7 +102,7 @@
                    (values x (nth-value 1 (stream-cursor-position stream))))))))
 
 (defvar *highlight-text-style*
-  (clim:make-text-style :fix nil :small))
+  (clim:make-text-style :fix nil :smaller))
 
 (defun present-function-info (function stream)
   (let ((*print-right-margin* nil) ; TODO correct?
