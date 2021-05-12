@@ -1,6 +1,6 @@
 ;;;; presentations.lisp --- Presentation types provided by the view.timeline module.
 ;;;;
-;;;; Copyright (C) 2019, 2020 Jan Moringen
+;;;; Copyright (C) 2019, 2020, 2021 Jan Moringen
 ;;;;
 ;;;; Author: Jan Moringen <jmoringe@techfaak.uni-bielefeld.de>
 
@@ -72,12 +72,10 @@
                                                (view   t)
                                                &key)
   (let ((start (- (model:time object)          0 ; *start-time*
-                  ))
-        (end   (- (+ (model:time object) .001) 0 ; *start-time*
                   )))
     (multiple-value-bind (dx dy) (clim:transform-distance
                                   (clim:medium-transformation stream) 3 3)
-      (clim:draw-ellipse* stream start end 10 dx 0 0 dy))))
+      (clim:draw-ellipse* stream start 10 dx 0 0 dy))))
 
 (clim:define-presentation-type traces ()
   :inherit-from '(t))
