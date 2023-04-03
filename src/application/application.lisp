@@ -199,7 +199,8 @@
       (clim:make-pane 'clime:box-adjuster-gadget)
       (1/16 interactor))))
   (:pointer-documentation t)
-  (:update-instances-on-redefinition t))
+  ;; (:update-instances-on-redefinition t)
+  )
 
 ;;; Recording view
 
@@ -265,13 +266,13 @@
 
 (clim:define-command (com-focus-region :command-table performance-analyzer
                                        :name          t)
-    ((region clim.flamegraph.view.region::region :gesture :select))
+    ((region 'clim.flamegraph.view.region::region :gesture :select))
   (let ((timeline (clim:find-pane-named clim:*application-frame* 'timeline)))
     (set-timeline-model timeline nil region)))
 
 (clim:define-command (com-reset :command-table performance-analyzer
                                 :name          t)
-    ((area clim:blank-area
+    ((area 'clim:blank-area
            :gesture (:select
                      :tester                ((object)
                                              (and object
@@ -322,13 +323,13 @@
 
 (clim:define-command (com-dummy :command-table performance-analyzer
                                 :name          t)
-    ((event timeline::event :gesture :select)))
+    ((event 'timeline::event :gesture :select)))
 
 ;;; Test
 
 (clim:define-command (com-highlight-fake :command-table performance-analyzer
                                          :name          t)
-    ((thing integer :gesture :select)))
+    ((thing 'integer :gesture :select)))
 
 (clim:define-command (com-add-run :command-table performance-analyzer)
     ((run t))

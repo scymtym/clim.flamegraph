@@ -12,8 +12,7 @@
    (%tree :initarg  :tree
           :reader   tree))
   (:panes
-   (history     :application :height           40
-                             :scroll-bars      nil)
+   (history     :application :height           40)
    (zoom        :slider      :min-value        1
                              :max-value        10
                              :value            1
@@ -29,8 +28,7 @@
    (dim-uninteresting :toggle-button :label "Dim uninteresting")
    (function-list flat::flat-pane :model (run clim:*application-frame*))
    (flamegraph    flamegraph::flamegraph-pane :model       (tree clim:*application-frame*)
-                                              :width       10
-                                              :scroll-bars nil)
+                                              :width       10)
    (interactor    :interactor))
   (:layouts
    (:default (clim:vertically ()
@@ -54,11 +52,12 @@
   (:command-table (flamegraph-frame :inherit-from (flat::command-table)))
   (:menu-bar nil)
   (:pointer-documentation t)
-  (:update-instances-on-redefinition t))
+  ;; (:update-instances-on-redefinition t)
+  )
 
 (clim:define-command (com-focus :command-table flamegraph-frame
                                 :name          t)
-    ((node flamegraph::node :gesture :select))
+    ((node 'flamegraph::node :gesture :select))
   (let* ((frame      clim:*application-frame*)
          (flamegraph (clim:find-pane-named frame 'flamegraph)))
     (setf (flamegraph::focused flamegraph) (make-instance 'model::standard-tree :root node))))
@@ -75,7 +74,7 @@
 
 (clim:define-command (com-reset-focus :command-table flamegraph-frame
                                       :name          t)
-    ((background clim:blank-area
+    ((background 'clim:blank-area
                  :gesture (:select
                            :tester ((object)
                                     (when object

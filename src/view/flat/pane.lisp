@@ -42,8 +42,8 @@
 (clim:define-command-table command-table)
 
 (clim:define-command (com-set-sort-column :command-table command-table :name t)
-    ((view   t)
-     (column sortable-column-information))
+    ((view   't)
+     (column 'sortable-column-information))
   (let ((old-column (sort-column view)))
     (if (eq old-column column)
         (setf (sort-direction view) (ecase (sort-direction view)
@@ -58,5 +58,5 @@
   (list (climi::presentation-view presentation) object))
 
 (clim:define-command (com-select-function :command-table command-table :name t)
-    ((name view::name :gesture :select))
+    ((name 'view::name :gesture :select))
   )

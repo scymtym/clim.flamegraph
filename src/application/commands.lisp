@@ -8,7 +8,7 @@
 
 (clim:define-command (com-remove-node :command-table source-command-table
                                       :name          t)
-    ((node configuration-node :gesture :delete))
+    ((node 'configuration-node :gesture :delete))
   ;; (removef (sources (find-configuration clim:*application-frame*)) source)
 
   (when (typep node 'cons)
@@ -111,7 +111,7 @@
 
 (clim:define-command (com-remove-source :command-table source-command-table
                                         :name          t)
-    ((source source :gesture :delete))
+    ((source 'source :gesture :delete))
   (removef (sources (find-configuration clim:*application-frame*)) source))
 
 
@@ -141,7 +141,7 @@
 
 (clim:define-command (com-select-run :command-table run-command-table
                                      :name          t)
-    ((run run :gesture (:select :priority 2)))
+    ((run 'run :gesture (:select :priority 2)))
   (let ((frame clim:*application-frame*))
     (setf (run frame)   run
           (focus frame) run)
@@ -151,8 +151,8 @@
 
 (clim:define-command (com-delete-run :command-table run-command-table
                                      :name          t)
-    ((run run :gesture (:delete
-                        :documentation "Delete run")))
+    ((run 'run :gesture (:delete
+                         :documentation "Delete run")))
   (let ((frame clim:*application-frame*))
     (when (eq (run frame) run)
       (setf (focus frame) nil
@@ -161,11 +161,11 @@
 
 (clim:define-command (com-rename-run :command-table run-command-table
                                      :name          t)
-    ((run  run    :gesture (:edit
-                            :documentation "Rename run"))
-     (name string :default (with-output-to-string (stream)
-                             (print-run-time run stream))
-                  :insert-default t))
+    ((run  'run    :gesture (:edit
+                             :documentation "Rename run"))
+     (name 'string :default (with-output-to-string (stream)
+                              (print-run-time run stream))
+                   :insert-default t))
   (setf (model:name run) name))
 
 (clim:define-command (com-load-run :command-table run-command-table
@@ -179,5 +179,5 @@
                                    :name          t)
     ((run      'run :gesture (:select
                               :documentation "Save run to file"))
-     (filename pathname))
+     (filename 'pathname))
   (uiop:symbol-call '#:cl-store '#:store run filename))
