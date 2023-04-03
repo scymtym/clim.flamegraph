@@ -7,7 +7,11 @@
 
                 "clim.flamegraph.model"
                 "clim.flamegraph.recording"
-                "clim.flamegraph.view")
+                "clim.flamegraph.view"
+
+		(:feature :sbcl "clim.flamegraph.backend.sb-sprof")
+		(:feature :sbcl "clim.flamegraph.backend.sb-memory")
+		(:feature :sbcl "clim.flamegraph.backend.advice"))
 
   :components  ((:module     "application"
                  :pathname   "src/application"
