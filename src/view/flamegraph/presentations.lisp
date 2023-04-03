@@ -224,7 +224,9 @@
          (depth-limit (or 400 #+no (depth-limit view) most-positive-fixnum))
          (total-count (model:hit-count root))
          (sheet-width (clim:bounding-rectangle-width (clim:sheet-region stream)))
-         (scale       (* sheet-width shrink (/ total-count) (expt 2 0 #+no (scale view)))))
+         (scale       (if (zerop total-count)
+			  1
+			  (* sheet-width shrink (/ total-count) (expt 2 0 #+no (scale view))))))
     (labels ((present-node (node &optional (x (clim:stream-cursor-position stream)) (depth 0) (index 0))
                (let* ((presentation (clim:present node `(node ,depth ,index ,scale)
                                                   :stream stream :view view :single-box t))
